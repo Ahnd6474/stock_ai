@@ -23,6 +23,9 @@ class CostComponents:
 class SessionCostModel:
     """Conservative default curves; to be replaced by broker/vendor calibrated curves."""
 
+    def __init__(self, cost_model_version: str = "v1") -> None:
+        self.cost_model_version = cost_model_version
+
     def estimate(self, venue: VenueType, session: SessionType, participation: float) -> CostComponents:
         base = {
             ("KRX", "CORE_DAY"): CostComponents(1.0, 18.0, 4.0, 3.0, 2.0),
@@ -42,4 +45,15 @@ class SessionCostModel:
             spread_bps=c.spread_bps * mult,
             slippage_bps=c.slippage_bps * mult,
             impact_bps=c.impact_bps * mult,
+        )
+
+    def estimate_side(self, venue: VenueType, session: SessionType, participation: float, side: str) -> CostComponents:
+        base = self.estimate(venue, session, participation)
+        sell_tax = base.tax_bps if side.upper() == "SELL" else max(0.0, base.tax_bps - 18.0)
+        return CostComponents(
+            commission_bps=base.commission_bps,
+            tax_bps=sell_tax,
+            spread_bps=base.spread_bps,
+            slippage_bps=base.slippage_bps,
+            impact_bps=base.impact_bps,
         )

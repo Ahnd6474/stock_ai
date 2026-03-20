@@ -29,16 +29,16 @@ class ExecutionMapper:
         self.broker_cutoff_minutes = broker_cutoff_minutes
 
     def map_execution(self, req: ExecutionRequest) -> ExecutionPlan:
-        session = classify_session(req.decision_timestamp)
+        session = classify_session(req.decision_timestamp, self.calendar)
         ts = req.decision_timestamp
         selected_venue = "KRX"
         rollover_reason = None
 
         if session == "OFF_MARKET":
             ts = ts + timedelta(hours=12)
-            while classify_session(ts) == "OFF_MARKET":
+            while classify_session(ts, self.calendar) == "OFF_MARKET":
                 ts += timedelta(minutes=5)
-            session = classify_session(ts)
+            session = classify_session(ts, self.calendar)
             rollover_reason = "OFF_MARKET_ROLLOVER"
 
         local = ts.astimezone(ts.tzinfo)
@@ -46,9 +46,9 @@ class ExecutionMapper:
         phase_end = _phase_end_minutes(session)
         if phase_end - minutes <= self.broker_cutoff_minutes:
             ts += timedelta(minutes=5)
-            while classify_session(ts) == session:
+            while classify_session(ts, self.calendar) == session:
                 ts += timedelta(minutes=5)
-            session = classify_session(ts)
+            session = classify_session(ts, self.calendar)
             rollover_reason = "PHASE_END_ROLLOVER"
 
         if req.venue_eligibility == "KRX_PLUS_NXT" and req.broker_supports_nxt and req.venue_freshness_ok and req.session_liquidity_ok:
