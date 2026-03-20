@@ -1,12 +1,29 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 
 from .schemas import FusedPrediction
 
 
+@dataclass(frozen=True)
+class ModelArtifact:
+    model_version: str
+    schema_version: str = "v1"
+
+
 class NumericFirstPredictor:
+    def __init__(self, artifact: ModelArtifact | None = None) -> None:
+        self.artifact = artifact or ModelArtifact(model_version="numeric_baseline_v1")
+
+    def validate_schema(self, features: dict) -> None:
+        required = {"flow_strength", "trend_120m", "extension_60m"}
+        missing = [k for k in required if k not in features]
+        if missing:
+            raise ValueError(f"missing required features: {missing}")
+
     def predict(self, symbol: str, session_type: str, as_of_time: datetime, features: dict) -> FusedPrediction:
+        self.validate_schema(features)
         flow_strength = float(features.get("flow_strength", 0.0))
         trend_120m = float(features.get("trend_120m", 0.0))
         extension = float(features.get("extension_60m", 0.0))

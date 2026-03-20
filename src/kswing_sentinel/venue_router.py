@@ -23,15 +23,31 @@ class VenueRouter:
         self.cost_model = cost_model
 
     def choose(self, ctx: VenueContext) -> str:
+        return self.choose_with_rationale(ctx)[0]
+
+    def choose_with_rationale(self, ctx: VenueContext) -> tuple[str, list[str]]:
+        rationale: list[str] = []
         elig = self.eligibility_store.get(ctx.eligibility_version, ctx.symbol)
         if elig != "KRX_PLUS_NXT" or not ctx.broker_supports_nxt:
-            return "KRX"
+            rationale.append("NXT_NOT_ELIGIBLE_OR_UNSUPPORTED")
+            return "KRX", rationale
         if not ctx.venue_freshness_ok or not ctx.session_liquidity_ok:
-            return "KRX"
+            rationale.append("VENUE_STATE_UNCERTAIN_FAIL_CLOSED")
+            return "KRX", rationale
 
         krx_cost = self.cost_model.estimate("KRX", ctx.session_type, participation=0.03).total_bps
         nxt_cost = self.cost_model.estimate("NXT", ctx.session_type, participation=0.03).total_bps
 
         if ctx.session_type in {"NXT_PRE", "NXT_AFTER", "CLOSE_PRICE"}:
-            return "NXT" if nxt_cost <= krx_cost + 2.0 else "KRX"
-        return "KRX" if abs(krx_cost - nxt_cost) <= 1.0 else ("NXT" if nxt_cost < krx_cost else "KRX")
+            if nxt_cost <= krx_cost + 2.0:
+                rationale.append("NXT_SESSION_ADVANTAGE")
+                return "NXT", rationale
+            rationale.append("KRX_COST_PREFERRED")
+            return "KRX", rationale
+
+        if abs(krx_cost - nxt_cost) <= 1.0:
+            rationale.append("COST_GAP_SMALL_DEFAULT_KRX")
+            return "KRX", rationale
+        chosen = "NXT" if nxt_cost < krx_cost else "KRX"
+        rationale.append("LOWER_EXPECTED_COST")
+        return chosen, rationale

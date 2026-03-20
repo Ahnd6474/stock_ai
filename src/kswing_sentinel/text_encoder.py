@@ -15,3 +15,12 @@ class KoreanTextEncoder:
             h = hashlib.sha256(seed + i.to_bytes(2, "little")).digest()
             out.append((int.from_bytes(h[:4], "little") / 2**32) * 2 - 1)
         return out
+
+    def batch_encode(self, texts: list[str], dim: int) -> list[list[float]]:
+        return [self.encode(t, dim) for t in texts]
+
+    def metadata(self) -> dict:
+        return {
+            "encoder_version": self.encoder_version,
+            "tokenizer_version": self.tokenizer_version,
+        }
