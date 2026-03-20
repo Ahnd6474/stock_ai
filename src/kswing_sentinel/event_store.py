@@ -18,8 +18,6 @@ class EventDoc:
     source_quality_score: float
     canonical_event_id: str = ""
     cluster_id: str = ""
-    source_lineage: list[str] | None = None
-    novelty_score: float = 0.5
 
 
 class EventStore:
@@ -42,8 +40,6 @@ class EventStore:
                 source_quality_score=doc.source_quality_score,
                 canonical_event_id=canonical,
                 cluster_id=cluster,
-                source_lineage=doc.source_lineage or [doc.source_type],
-                novelty_score=doc.novelty_score,
             )
         )
 

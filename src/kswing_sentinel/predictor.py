@@ -16,22 +16,8 @@ class ModelArtifact:
 
 
 class NumericFirstPredictor:
-    def __init__(
-        self,
-        artifact: ModelArtifact | None = None,
-        model_blob: dict | None = None,
-        p_up_calibrator: ProbabilityCalibrator | None = None,
-        dd_adjuster: QuantileAdjuster | None = None,
-    ) -> None:
+    def __init__(self, artifact: ModelArtifact | None = None) -> None:
         self.artifact = artifact or ModelArtifact(model_version="numeric_baseline_v1")
-        self.model_blob = model_blob or {}
-        self.p_up_calibrator = p_up_calibrator or ProbabilityCalibrator()
-        self.dd_adjuster = dd_adjuster or QuantileAdjuster()
-
-    @classmethod
-    def from_artifact_file(cls, path: str, model_version: str = "artifact_v1") -> "NumericFirstPredictor":
-        blob = json.loads(Path(path).read_text())
-        return cls(artifact=ModelArtifact(model_version=model_version), model_blob=blob)
 
     def validate_schema(self, features: dict) -> None:
         required = {"flow_strength", "trend_120m", "extension_60m"}

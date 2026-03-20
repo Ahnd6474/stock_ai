@@ -34,13 +34,9 @@ class FeatureStore:
         out.setdefault("session_type", session_type)
         out.setdefault("feature_fresh", bool(base))
         out.setdefault("missing_core_numeric", not bool(base))
-        out.update(self.market_context)
         return out
 
     def build_offline_features(self, symbol: str, as_of_time: datetime, session_type: str) -> dict:
         out = self.build_online_features(symbol, as_of_time, session_type)
         out["offline_row"] = True
         return out
-
-    def set_market_context(self, **kwargs: float) -> None:
-        self.market_context.update(kwargs)

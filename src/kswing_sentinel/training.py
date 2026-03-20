@@ -45,24 +45,3 @@ class TrainingPipeline:
                 }
             )
         return dataset
-
-    def train_baseline(self, dataset: list[dict], feature_keys: list[str]) -> dict:
-        """Fit a tiny mean-target linear baseline for scaffolding.
-
-        Returns serializable artifact.
-        """
-        if not dataset:
-            return {"model_type": "linear_stub", "bias": 0.0, "weights": {k: 0.0 for k in feature_keys}}
-
-        y_mean = sum(r["y"] for r in dataset) / len(dataset)
-        # very light heuristic weights from feature covariance sign
-        weights: dict[str, float] = {}
-        for k in feature_keys:
-            x = [r["x"][k] for r in dataset]
-            xm = sum(x) / len(x)
-            cov = sum((xi - xm) * (r["y"] - y_mean) for xi, r in zip(x, dataset)) / max(1, len(dataset))
-            weights[k] = cov
-        return {"model_type": "linear_stub", "bias": y_mean, "weights": weights}
-
-    def save_artifact(self, artifact: dict, path: str) -> None:
-        Path(path).write_text(json.dumps(artifact, ensure_ascii=False, indent=2))

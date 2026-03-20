@@ -26,11 +26,6 @@ class LiveInferenceService:
                        session_liquidity_ok: bool = True, no_position: bool = True):
         session = classify_session(as_of_time)
         sem = self.normalizer.normalize(raw_event_payload)
-        if raw_event_payload:
-            self._semantic_cache[symbol] = (as_of_time, sem.event_score)
-        elif symbol in self._semantic_cache:
-            _, cached_score = self._semantic_cache[symbol]
-            sem = sem.model_copy(update={"event_score": cached_score})
         _ = self.vectorizer.build(sem.canonical_summary, source_doc_ids=[], cluster_ids=[], as_of_time=as_of_time, session_type=session)
         features = dict(features)
         features.setdefault("flow_strength", 0.0)
