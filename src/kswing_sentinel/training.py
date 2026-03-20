@@ -22,3 +22,24 @@ class WalkForwardSplitter:
             folds.append(Fold(tr[0], tr[-1], va[0], va[-1]))
             i += step
         return folds
+
+
+class TrainingPipeline:
+    """Lightweight scaffold for walk-forward training orchestration."""
+
+    def __init__(self) -> None:
+        self.splitter = WalkForwardSplitter()
+
+    def build_dataset(self, rows: list[dict], feature_keys: list[str], label_key: str) -> list[dict]:
+        dataset: list[dict] = []
+        for r in rows:
+            if label_key not in r:
+                continue
+            dataset.append(
+                {
+                    "x": {k: float(r.get(k, 0.0)) for k in feature_keys},
+                    "y": float(r[label_key]),
+                    "date": r["date"],
+                }
+            )
+        return dataset
