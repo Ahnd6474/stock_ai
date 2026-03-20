@@ -19,6 +19,7 @@ src/kswing_sentinel/decision_engine.py
 src/kswing_sentinel/event_store.py
 src/kswing_sentinel/example_payloads.py
 src/kswing_sentinel/execution_mapper.py
+src/kswing_sentinel/fdr_dataset.py
 src/kswing_sentinel/feature_store.py
 src/kswing_sentinel/flow_snapshot_store.py
 src/kswing_sentinel/label_builder.py
@@ -40,6 +41,7 @@ src/kswing_sentinel/vectorization.py
 src/kswing_sentinel/venue_router.py
 src/kswing_sentinel/yahoo_finance.py
 tests/test_audit_log.py
+tests/test_backtester_portfolio.py
 tests/test_backtester_realism.py
 tests/test_broker_gateway.py
 tests/test_calendar_pause.py
@@ -47,11 +49,16 @@ tests/test_calibration_predictor.py
 tests/test_contract_examples.py
 tests/test_cost_model.py
 tests/test_degraded_mode.py
+tests/test_event_store_lineage.py
 tests/test_execution_mapper_conservative.py
+tests/test_fdr_dataset.py
+tests/test_feature_store_context.py
 tests/test_flow_leakage.py
 tests/test_label_builder.py
+tests/test_label_builder_extensions.py
 tests/test_llm_provider_path.py
 tests/test_no_lookahead.py
+tests/test_orchestration_resilience.py
 tests/test_predictor_artifact_schema.py
 tests/test_production_runtime.py
 tests/test_risk_portfolio.py

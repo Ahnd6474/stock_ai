@@ -81,6 +81,12 @@ def _ratio(numerator: float | None, denominator: float | None) -> float:
     return numerator / denominator - 1.0
 
 
+def _relative_ratio(numerator: float | None, denominator: float | None) -> float | None:
+    if numerator is None or denominator in {None, 0.0}:
+        return None
+    return numerator / denominator - 1.0
+
+
 def _sma(values: Sequence[float], window: int) -> float | None:
     if len(values) < window:
         return None
@@ -217,7 +223,7 @@ class YahooFinanceMarketData:
         default_suffix: str = ".KS",
         intraday_period: str = "5d",
         intraday_interval: str = "5m",
-        daily_period: str = "3mo",
+        daily_period: str = "6mo",
     ) -> None:
         self.symbols = list(symbols)
         self.feature_store = feature_store or FeatureStore()
@@ -516,13 +522,13 @@ class YahooFinanceMarketData:
             "flow_strength": 0.0,
             "trend_120m": _ratio(last_price, trend_anchor),
             "extension_60m": _ratio(last_price, extension_anchor),
-            "gap_from_prev_close": _ratio(last_price, previous_close),
-            "return_20d": _ratio(last_price, daily_closes[-21] if len(daily_closes) >= 21 else None),
+            "gap_from_prev_close": _relative_ratio(last_price, previous_close),
+            "return_20d": _relative_ratio(last_price, daily_closes[-21] if len(daily_closes) >= 21 else None),
             "volume_ratio_20d": 0.0 if latest_volume is None or volume_mean in {None, 0.0} else latest_volume / volume_mean,
             "sma_20": sma_20,
             "sma_60": sma_60,
-            "price_vs_sma20": _ratio(last_price, sma_20),
-            "price_vs_sma60": _ratio(last_price, sma_60),
+            "price_vs_sma20": _relative_ratio(last_price, sma_20),
+            "price_vs_sma60": _relative_ratio(last_price, sma_60),
             "ema_12": ema_12,
             "ema_26": ema_26,
             "macd": macd_value,
