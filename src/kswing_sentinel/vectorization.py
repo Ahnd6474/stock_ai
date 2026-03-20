@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime, timezone
 
 
 def _hash_to_vec(text: str, dim: int) -> list[float]:
@@ -14,9 +15,43 @@ def _hash_to_vec(text: str, dim: int) -> list[float]:
 
 
 class VectorizationPipeline:
-    def build(self, summary: str, social: str = "", macro: str = "") -> dict:
+    def __init__(
+        self,
+        encoder_version: str = "ko_bert_v1",
+        tokenizer_version: str = "ko_bert_tokenizer_v1",
+        attention_aggregator_version: str = "hier_attn_v1",
+        prompt_version: str = "prompt_v1",
+    ) -> None:
+        self.encoder_version = encoder_version
+        self.tokenizer_version = tokenizer_version
+        self.attention_aggregator_version = attention_aggregator_version
+        self.prompt_version = prompt_version
+
+    def build(
+        self,
+        summary: str,
+        social: str = "",
+        macro: str = "",
+        source_doc_ids: list[str] | None = None,
+        cluster_ids: list[str] | None = None,
+        as_of_time: datetime | None = None,
+        session_type: str = "OFF_MARKET",
+    ) -> dict:
+        now = datetime.now(timezone.utc)
+        asof = as_of_time or now
         return {
             "z_event": _hash_to_vec(summary, 64),
             "z_social": _hash_to_vec(social or summary, 32),
             "z_macro": _hash_to_vec(macro or "KOSPI", 16),
+            "metadata": {
+                "encoder_version": self.encoder_version,
+                "tokenizer_version": self.tokenizer_version,
+                "attention_aggregator_version": self.attention_aggregator_version,
+                "prompt_version": self.prompt_version,
+                "source_doc_ids": source_doc_ids or [],
+                "cluster_ids": cluster_ids or [],
+                "generated_at": now.isoformat(),
+                "as_of_time": asof.isoformat(),
+                "session_type": session_type,
+            },
         }
