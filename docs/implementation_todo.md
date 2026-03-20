@@ -5,6 +5,14 @@
 
 ---
 
+## Progress Snapshot (2026-03-20)
+
+- DONE: TODO-03(기본 cost 연동/cutoff), TODO-05(기본 run_trade), TODO-07(버전+날짜 저장), TODO-08(라우팅 rationale), TODO-13(online/offline build), TODO-20 일부(idempotency/retry 스캐폴드).
+- IN_PROGRESS: TODO-01, TODO-02, TODO-04, TODO-06, TODO-09, TODO-10~12, TODO-14~19.
+- NOT_STARTED: 외부 실데이터/실거래 연동, 실모델 학습/캘리브레이션 아티팩트, 실제 Korean BERT 연동.
+
+---
+
 ## Execution Rules (필수)
 
 - 상태값은 `NOT_STARTED -> IN_PROGRESS -> BLOCKED -> DONE`만 사용.
