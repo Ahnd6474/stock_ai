@@ -9,6 +9,12 @@ class Metrics:
     llm_schema_violation_rate: float = 0.0
     degraded_mode_rate: float = 0.0
     venue_selection_error_rate: float = 0.0
+    feature_freshness_lag_sec: float = 0.0
+    semantic_coverage_rate: float = 1.0
+    slippage_vs_expected_bps: float = 0.0
+    realized_dd_vs_predicted_dd_gap: float = 0.0
+    venue_routing_mix_nxt: float = 0.0
+    uncertainty_bucket_perf: dict | None = None
 
 
 class Monitoring:
@@ -17,6 +23,21 @@ class Monitoring:
 
     def record_llm_violation(self) -> None:
         self.metrics.llm_schema_violation_rate += 1
+
+    def record_degraded_mode(self) -> None:
+        self.metrics.degraded_mode_rate += 1
+
+    def record_feature_lag(self, lag_sec: float) -> None:
+        self.metrics.feature_freshness_lag_sec = max(self.metrics.feature_freshness_lag_sec, lag_sec)
+
+    def record_slippage_gap(self, actual_bps: float, expected_bps: float) -> None:
+        self.metrics.slippage_vs_expected_bps = actual_bps - expected_bps
+
+    def record_routing_mix(self, nxt_ratio: float) -> None:
+        self.metrics.venue_routing_mix_nxt = min(1.0, max(0.0, nxt_ratio))
+
+    def record_uncertainty_bucket_perf(self, perf: dict) -> None:
+        self.metrics.uncertainty_bucket_perf = dict(perf)
 
     def snapshot(self) -> Metrics:
         return self.metrics

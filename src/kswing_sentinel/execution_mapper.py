@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from .calendar import TradingCalendar
+from .cost_model import SessionCostModel
 from .schemas import ExecutionPlan, ExecutionRequest
 from .session_rules import classify_session, round_to_next_5m
 
@@ -16,27 +18,37 @@ def _phase_end_minutes(session_type: str) -> int:
 
 
 class ExecutionMapper:
+    def __init__(
+        self,
+        calendar: TradingCalendar | None = None,
+        cost_model: SessionCostModel | None = None,
+        broker_cutoff_minutes: int = 3,
+    ) -> None:
+        self.calendar = calendar or TradingCalendar()
+        self.cost_model = cost_model or SessionCostModel()
+        self.broker_cutoff_minutes = broker_cutoff_minutes
+
     def map_execution(self, req: ExecutionRequest) -> ExecutionPlan:
-        session = classify_session(req.decision_timestamp)
+        session = classify_session(req.decision_timestamp, self.calendar)
         ts = req.decision_timestamp
         selected_venue = "KRX"
         rollover_reason = None
 
         if session == "OFF_MARKET":
             ts = ts + timedelta(hours=12)
-            while classify_session(ts) == "OFF_MARKET":
+            while classify_session(ts, self.calendar) == "OFF_MARKET":
                 ts += timedelta(minutes=5)
-            session = classify_session(ts)
+            session = classify_session(ts, self.calendar)
             rollover_reason = "OFF_MARKET_ROLLOVER"
 
         local = ts.astimezone(ts.tzinfo)
         minutes = local.hour * 60 + local.minute
         phase_end = _phase_end_minutes(session)
-        if phase_end - minutes <= 3:
+        if phase_end - minutes <= self.broker_cutoff_minutes:
             ts += timedelta(minutes=5)
-            while classify_session(ts) == session:
+            while classify_session(ts, self.calendar) == session:
                 ts += timedelta(minutes=5)
-            session = classify_session(ts)
+            session = classify_session(ts, self.calendar)
             rollover_reason = "PHASE_END_ROLLOVER"
 
         if req.venue_eligibility == "KRX_PLUS_NXT" and req.broker_supports_nxt and req.venue_freshness_ok and req.session_liquidity_ok:
@@ -48,7 +60,7 @@ class ExecutionMapper:
                 rollover_reason = rollover_reason or "KRX_ONLY_CONSERVATIVE"
 
         exec_time = round_to_next_5m(ts)
-        cost_bps = 8.0 if selected_venue == "KRX" else 12.0
+        cost_bps = self.cost_model.estimate(selected_venue, session, participation=0.03).total_bps
         return ExecutionPlan(
             symbol=req.symbol,
             selected_venue=selected_venue,
