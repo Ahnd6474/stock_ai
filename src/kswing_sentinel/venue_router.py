@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 
 from .cost_model import SessionCostModel
 from .nxt_eligibility_store import NXTEligibilityStore
@@ -15,6 +16,9 @@ class VenueContext:
     broker_supports_nxt: bool
     venue_freshness_ok: bool
     session_liquidity_ok: bool
+    snapshot_date: date | None = None
+    as_of_date: date | None = None
+    liquidity_bucket: str = "mid"
 
 
 class VenueRouter:
@@ -27,16 +31,24 @@ class VenueRouter:
 
     def choose_with_rationale(self, ctx: VenueContext) -> tuple[str, list[str]]:
         rationale: list[str] = []
-        elig = self.eligibility_store.get(ctx.eligibility_version, ctx.symbol)
-        if elig != "KRX_PLUS_NXT" or not ctx.broker_supports_nxt:
+        elig, broker_routable, issue = self.eligibility_store.resolve(
+            ctx.eligibility_version,
+            ctx.symbol,
+            snapshot_date=ctx.snapshot_date,
+            as_of_date=ctx.as_of_date,
+        )
+        if issue:
+            rationale.append(issue)
+            return "KRX", rationale
+        if elig != "KRX_PLUS_NXT" or not ctx.broker_supports_nxt or not broker_routable:
             rationale.append("NXT_NOT_ELIGIBLE_OR_UNSUPPORTED")
             return "KRX", rationale
         if not ctx.venue_freshness_ok or not ctx.session_liquidity_ok:
             rationale.append("VENUE_STATE_UNCERTAIN_FAIL_CLOSED")
             return "KRX", rationale
 
-        krx_cost = self.cost_model.estimate("KRX", ctx.session_type, participation=0.03).total_bps
-        nxt_cost = self.cost_model.estimate("NXT", ctx.session_type, participation=0.03).total_bps
+        krx_cost = self.cost_model.estimate("KRX", ctx.session_type, participation=0.03, liquidity_bucket=ctx.liquidity_bucket).total_bps
+        nxt_cost = self.cost_model.estimate("NXT", ctx.session_type, participation=0.03, liquidity_bucket=ctx.liquidity_bucket).total_bps
 
         if ctx.session_type in {"NXT_PRE", "NXT_AFTER", "CLOSE_PRICE"}:
             if nxt_cost <= krx_cost + 2.0:

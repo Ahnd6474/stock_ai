@@ -47,8 +47,19 @@ class LabelBuilder:
             return None
         exit_px = horizon[0].close
         gross = (exit_px - entry) / entry
-        cost = self.costs.estimate(plan.selected_venue, plan.selected_session_type, participation=0.03).total_bps / 1e4
-        return gross - cost
+        entry_cost = self.costs.estimate_side(
+            plan.selected_venue,
+            plan.selected_session_type,
+            participation=0.03,
+            side="BUY",
+        ).total_bps / 1e4
+        exit_cost = self.costs.estimate_side(
+            plan.selected_venue,
+            plan.selected_session_type,
+            participation=0.03,
+            side="SELL",
+        ).total_bps / 1e4
+        return gross - entry_cost - exit_cost
 
     def build(self, symbol: str, decision_ts: datetime, prices: list[PricePoint], req: ExecutionRequest) -> LabelBundle:
         plan = self.mapper.map_execution(req)
@@ -72,8 +83,18 @@ class LabelBuilder:
                 dd20 = max(0.0, (entry - min(window20)) / entry)
             p_up = 1.0 if px20 > entry else 0.0
 
-        entry_cost_bps = self.costs.estimate(plan.selected_venue, plan.selected_session_type, participation=0.03).total_bps
-        exit_cost_bps = self.costs.estimate(plan.selected_venue, plan.selected_session_type, participation=0.03).total_bps
+        entry_cost_bps = self.costs.estimate_side(
+            plan.selected_venue,
+            plan.selected_session_type,
+            participation=0.03,
+            side="BUY",
+        ).total_bps
+        exit_cost_bps = self.costs.estimate_side(
+            plan.selected_venue,
+            plan.selected_session_type,
+            participation=0.03,
+            side="SELL",
+        ).total_bps
         return LabelBundle(
             er_5d=er5,
             er_20d=er20,

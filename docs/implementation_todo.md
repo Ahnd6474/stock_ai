@@ -5,6 +5,68 @@
 
 ---
 
+## 2026-03-20 재평가 스냅샷 (Baseline 인정 + 실전 미달)
+
+- 저장소 구조/모듈 분리: **7/10**
+- 실행·세션·라우팅 골격: **5/10**
+- 백테스트/라벨 정합성: **4/10**
+- 예측 모델 실제성: **2/10**
+- 텍스트/LLM/벡터 실질성: **2/10**
+- 리스크/포트폴리오: **4/10**
+- 운영/감사/모니터링: **3/10**
+- 실거래 가능성: **1/10**
+
+**총평:** "좋은 설계문서를 따라 만든 구현 스캐폴드 + 일부 toy implementation".
+
+### 우선순위 고정 원칙 (순서 변경 금지)
+1. `calendar.py`
+2. `session_rules.py`
+3. `execution_mapper.py`
+4. `label_builder.py`
+5. `backtester.py`
+6. `cost_model.py`
+7. `nxt_eligibility_store.py`
+8. `venue_router.py`
+9. `broker_gateway.py`
+10. `training.py`
+11. `predictor.py`
+12. calibration
+13. `feature_store.py`
+14. `risk_engine.py`
+15. `portfolio_engine.py`
+16. `event_store.py`
+17. `llm_event_normalizer.py`
+18. `text_encoder.py`
+19. `attention_aggregator.py`
+20. `vectorization.py`
+21. `live.py`
+22. `orchestration.py`
+23. `monitoring.py`
+
+### 즉시 반영된 공통 요구사항
+- 모든 항목 완료 조건에 테스트 증적을 강제한다.
+- `execution_mapper` / `label_builder` / `backtester`는 동일한 실행 규칙 소스를 공유해야 한다.
+- `predictor.py`는 하드코딩 baseline 제거를 목표로 artifact + calibrator 경로를 기본 지원한다.
+
+### 최근 반영 진행 (2026-03-20)
+- A1 `calendar.py`: 기본 휴장일 세트 + half-day 조기 종료 처리 + `is_tradable_minute()` 추가 (**IN_PROGRESS**)
+- A2 `session_rules.py`: 캘린더 tradable minute 기반 경계 배타화 및 확장 경계 테스트 추가 (**IN_PROGRESS**)
+- A3 `execution_mapper.py`: broker cutoff/신선도/유동성/브로커 미지원 별 rollover reason 세분화 (**IN_PROGRESS**)
+- A4 `label_builder.py`: entry/exit side별 비용 반영으로 ER/라벨 net 계산 정합성 개선 (**IN_PROGRESS**)
+- A5 `backtester.py`: same-bar(의사결정 시각 이하) 진입 금지 + partial-fill ratio 반영 (**IN_PROGRESS**)
+- B1 `cost_model.py`: liquidity bucket + 비선형 participation impact + `cost_model_version=v2` 반영 (**IN_PROGRESS**)
+- B2 `nxt_eligibility_store.py`: snapshot stale fail-closed resolve + broker routability 분리 저장 (**IN_PROGRESS**)
+- B3 `venue_router.py`: stale snapshot 차단/정책 기반 rationale 강화 (**IN_PROGRESS**)
+- B4 `broker_gateway.py`: replace/reconcile/TIF 검증을 포함한 상태 확장 (**IN_PROGRESS**)
+- C1 `training.py`: walk-forward 학습 + fold metric/artifact 저장 파이프라인 추가 (**IN_PROGRESS**)
+- C2 `predictor.py`: artifact feature schema 기반 검증 및 model_version 반영 (**IN_PROGRESS**)
+- C3 `calibration.py`: calibrator fitting + pre/post(Brier) 비교 리포트 추가 (**IN_PROGRESS**)
+- C1-EXT `training.py`: multi-head artifact(`er_20d`,`dd_20d`,`p_up_20d`) 생성 경로 추가 (**IN_PROGRESS**)
+- C2-EXT `predictor.py`: multi-head artifact 추론 및 uncertainty 파라미터 적용 (**IN_PROGRESS**)
+- C3-EXT `calibration.py`: DD calibration(MAE) + uncertainty bucket 요약 리포트 추가 (**IN_PROGRESS**)
+
+---
+
 ## Execution Rules (필수)
 
 - 상태값은 `NOT_STARTED -> IN_PROGRESS -> BLOCKED -> DONE`만 사용.
