@@ -14,7 +14,7 @@ def classify_session(ts: datetime, calendar: TradingCalendar | None = None) -> S
         raise ValueError("timestamp must be timezone-aware")
     cal = calendar or TradingCalendar()
     local = ts.astimezone(KST)
-    if not cal.is_trading_day(local.date()) or cal.is_in_pause_window(local):
+    if not cal.is_trading_day(local.date()) or not cal.is_tradable_minute(local):
         return "OFF_MARKET"
     t = local.time()
     hm = t.hour * 60 + t.minute

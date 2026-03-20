@@ -37,17 +37,22 @@ class BrokerGateway:
         self.capabilities = capabilities
         self._counter = 0
         self._open_orders: dict[str, OrderRequest] = {}
+        self._filled_qty: dict[str, int] = {}
 
     def submit(self, order: OrderRequest, market_price: float, liquidity_score: float) -> ExecutionReport:
         self._counter += 1
         oid = f"ORD-{self._counter:07d}"
         self._open_orders[oid] = order
+        self._filled_qty[oid] = 0
         if order.venue == "NXT" and not self.capabilities.supports_nxt:
+            return ExecutionReport(oid, 0, 0.0, "REJECTED", order.venue, order.submitted_at)
+        if order.tif not in {"DAY", "IOC"}:
             return ExecutionReport(oid, 0, 0.0, "REJECTED", order.venue, order.submitted_at)
         fill_ratio = 1.0 if liquidity_score >= 0.6 else max(0.2, liquidity_score)
         filled = int(order.qty * fill_ratio)
         if filled == 0:
             return ExecutionReport(oid, 0, 0.0, "NEW", order.venue, order.submitted_at)
+        self._filled_qty[oid] = filled
         slip = 0.0006 if order.venue == "KRX" else 0.0012
         avg = market_price * (1 + slip if order.side == "BUY" else 1 - slip)
         status = "FILLED" if filled == order.qty else "PARTIAL"
@@ -60,3 +65,18 @@ class BrokerGateway:
         if order is None:
             return ExecutionReport(order_id, 0, 0.0, "REJECTED", "KRX", at)
         return ExecutionReport(order_id, 0, 0.0, "CANCELED", order.venue, at)
+
+    def replace(self, order_id: str, new_qty: int, at: datetime) -> ExecutionReport:
+        order = self._open_orders.get(order_id)
+        if order is None:
+            return ExecutionReport(order_id, 0, 0.0, "REJECTED", "KRX", at)
+        order.qty = max(0, new_qty)
+        return ExecutionReport(order_id, self._filled_qty.get(order_id, 0), 0.0, "REPLACED", order.venue, at)
+
+    def reconcile(self, order_id: str, at: datetime) -> ExecutionReport:
+        order = self._open_orders.get(order_id)
+        if order is None:
+            return ExecutionReport(order_id, 0, 0.0, "FILLED", "KRX", at)
+        filled = self._filled_qty.get(order_id, 0)
+        status = "PARTIAL" if filled > 0 else "NEW"
+        return ExecutionReport(order_id, filled, 0.0, status, order.venue, at)
