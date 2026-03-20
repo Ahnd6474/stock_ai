@@ -44,6 +44,9 @@ class NumericFirstPredictor:
             raise ValueError("artifact payload must be a JSON object")
         return payload
 
+    def _model_type(self) -> str:
+        return str(self.model_blob.get("model_type", "linear_head"))
+
     def validate_schema(self, features: dict) -> None:
         required = set(self.model_blob.get("feature_keys", ["flow_strength", "trend_120m", "extension_60m"]))
         missing = [k for k in required if k not in features]
@@ -54,6 +57,27 @@ class NumericFirstPredictor:
         weights = head_blob.get("weights", {})
         bias = float(head_blob.get("bias", 0.0))
         return bias + sum(float(weights.get(k, 0.0)) * float(features.get(k, 0.0)) for k in weights)
+
+    def _predict_tree_ensemble_head(self, head_blob: dict[str, Any], features: dict) -> float:
+        # 학습 산출물(JSON dump) 기반 GBDT 유사 추론기.
+        score = float(head_blob.get("base_score", 0.0))
+        trees = head_blob.get("trees", [])
+        if not isinstance(trees, list):
+            raise ValueError("trees must be a list")
+        for tree in trees:
+            feature = str(tree.get("feature", ""))
+            threshold = float(tree.get("threshold", 0.0))
+            left = float(tree.get("left", 0.0))
+            right = float(tree.get("right", 0.0))
+            value = float(features.get(feature, 0.0))
+            score += left if value <= threshold else right
+        return score
+
+    def _predict_head(self, head_blob: dict[str, Any], features: dict) -> float:
+        model_type = self._model_type()
+        if model_type == "tree_ensemble_v1":
+            return self._predict_tree_ensemble_head(head_blob, features)
+        return self._predict_linear_head(head_blob, features)
 
     def predict(self, symbol: str, session_type: str, as_of_time: datetime, features: dict) -> FusedPrediction:
         self.validate_schema(features)
@@ -71,9 +95,9 @@ class NumericFirstPredictor:
         )
         heads = self.model_blob.get("heads", {})
         if heads:
-            er20 = self._predict_linear_head(heads.get("er_20d", {}), features)
-            dd20 = self._predict_linear_head(heads.get("dd_20d", {}), features)
-            pup_raw = self._predict_linear_head(heads.get("p_up_20d", {}), features)
+            er20 = self._predict_head(heads.get("er_20d", {}), features)
+            dd20 = self._predict_head(heads.get("dd_20d", {}), features)
+            pup_raw = self._predict_head(heads.get("p_up_20d", {}), features)
             pup = min(0.95, max(0.05, pup_raw))
         elif self.model_blob.get("weights"):
             er20 = self._predict_linear_head(self.model_blob, features)
