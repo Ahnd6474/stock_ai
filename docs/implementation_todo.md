@@ -64,8 +64,6 @@
 - C1-EXT `training.py`: multi-head artifact(`er_20d`,`dd_20d`,`p_up_20d`) 생성 경로 추가 (**IN_PROGRESS**)
 - C2-EXT `predictor.py`: multi-head artifact 추론 및 uncertainty 파라미터 적용 (**IN_PROGRESS**)
 - C3-EXT `calibration.py`: DD calibration(MAE) + uncertainty bucket 요약 리포트 추가 (**IN_PROGRESS**)
-- D3 `risk_engine.py`: hard stop/uncertainty shrink/session throttle/regime-event reduce hook 추가 (**IN_PROGRESS**)
-- D4 `portfolio_engine.py`: sector/correlation/liquidity/turnover 기반 캡 및 우선순위 적용 (**IN_PROGRESS**)
 
 ---
 
