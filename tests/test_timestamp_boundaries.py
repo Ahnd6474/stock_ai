@@ -18,4 +18,4 @@ def test_rollover_near_phase_end():
         session_liquidity_ok=True,
     )
     plan = mapper.map_execution(req)
-    assert plan.rollover_reason == "PHASE_END_ROLLOVER"
+    assert plan.rollover_reason == "BROKER_CUTOFF_ROLLOVER"

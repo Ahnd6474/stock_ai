@@ -21,9 +21,26 @@ class TradingCalendar:
         self,
         holidays: set[date] | None = None,
         half_days: set[date] | None = None,
-        session_calendar_version: str = "v1",
+        session_calendar_version: str = "v2",
     ) -> None:
-        self.holidays = holidays or set()
+        default_holidays = {
+            date(2026, 1, 1),
+            date(2026, 2, 16),
+            date(2026, 2, 17),
+            date(2026, 2, 18),
+            date(2026, 3, 1),
+            date(2026, 5, 5),
+            date(2026, 5, 24),
+            date(2026, 6, 6),
+            date(2026, 8, 15),
+            date(2026, 9, 24),
+            date(2026, 9, 25),
+            date(2026, 9, 26),
+            date(2026, 10, 3),
+            date(2026, 10, 9),
+            date(2026, 12, 25),
+        }
+        self.holidays = holidays or default_holidays
         self.half_days = half_days or set()
         self.session_calendar_version = session_calendar_version
 
@@ -31,6 +48,7 @@ class TradingCalendar:
             SessionWindow("PRE_OPEN_PAUSE", time(8, 50), time(9, 0)),
             SessionWindow("CLOSE_AUCTION_PAUSE", time(15, 20), time(15, 30)),
         )
+        self.early_close_time = time(12, 0)
 
     def is_trading_day(self, d: date) -> bool:
         return d.weekday() < 5 and d not in self.holidays
@@ -43,8 +61,11 @@ class TradingCalendar:
 
     def add_trading_days(self, d: date, n: int) -> date:
         cur = d
-        for _ in range(n):
-            cur = self.next_trading_day(cur)
+        step = 1 if n >= 0 else -1
+        for _ in range(abs(n)):
+            cur = cur + timedelta(days=step)
+            while not self.is_trading_day(cur):
+                cur = cur + timedelta(days=step)
         return cur
 
     def normalize_ts(self, ts: datetime) -> datetime:
@@ -57,5 +78,18 @@ class TradingCalendar:
 
     def is_in_pause_window(self, ts: datetime) -> bool:
         local = self.normalize_ts(ts)
+        if self.is_half_day(local.date()) and local.time() >= self.early_close_time:
+            return True
         t = local.time()
         return any(w.start <= t < w.end for w in self.pause_windows)
+
+    def is_tradable_minute(self, ts: datetime) -> bool:
+        local = self.normalize_ts(ts)
+        if not self.is_trading_day(local.date()):
+            return False
+        if self.is_in_pause_window(local):
+            return False
+        t = local.time()
+        if self.is_half_day(local.date()):
+            return time(8, 0) <= t < self.early_close_time
+        return (time(8, 0) <= t < time(8, 50)) or (time(9, 0) <= t < time(15, 20)) or (time(15, 30) <= t < time(20, 0))
