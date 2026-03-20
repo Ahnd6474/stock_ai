@@ -140,6 +140,7 @@ class YahooFinanceMarketData:
         self.intraday_interval = intraday_interval
         self.daily_period = daily_period
         self._ticker_factory = ticker_factory or self._default_ticker_factory
+        self._custom_ticker_factory = ticker_factory is not None
         self.quote_cache: dict[str, YahooFinanceQuote] = {}
 
     @staticmethod
@@ -161,10 +162,40 @@ class YahooFinanceMarketData:
 
     def fetch_quote(self, symbol: str) -> YahooFinanceQuote:
         yahoo_symbol = self.resolve_symbol(symbol)
+        if not self._custom_ticker_factory:
+            quote = self._fetch_quote_from_chart(symbol, yahoo_symbol)
+            self.quote_cache[symbol] = quote
+            return quote
         ticker = self._ticker_factory(yahoo_symbol)
         quote = self._fetch_quote_from_ticker(symbol, yahoo_symbol, ticker)
         self.quote_cache[symbol] = quote
         return quote
+
+    def _fetch_quote_from_chart(self, symbol: str, yahoo_symbol: str) -> YahooFinanceQuote:
+        chart = self._request_chart(yahoo_symbol, range_value="5d", interval="1d")
+        meta = _as_mapping(chart.get("meta"))
+        history = self._history_from_chart(chart)
+        closes = _series_values(history, "Close")
+        opens = _series_values(history, "Open")
+        highs = _series_values(history, "High")
+        lows = _series_values(history, "Low")
+        volumes = _series_values(history, "Volume")
+        return YahooFinanceQuote(
+            symbol=symbol,
+            yahoo_symbol=yahoo_symbol,
+            fetched_at=datetime.now(timezone.utc),
+            currency=meta.get("currency"),
+            exchange=meta.get("exchangeName") or meta.get("fullExchangeName"),
+            short_name=None,
+            last_price=_coerce_float(meta.get("regularMarketPrice")) or (closes[-1] if closes else None),
+            previous_close=_coerce_float(meta.get("previousClose")),
+            open_price=_coerce_float(meta.get("regularMarketOpen")) or (opens[-1] if opens else None),
+            day_high=_coerce_float(meta.get("regularMarketDayHigh")) or (highs[-1] if highs else None),
+            day_low=_coerce_float(meta.get("regularMarketDayLow")) or (lows[-1] if lows else None),
+            volume=_coerce_int(meta.get("regularMarketVolume")) or (int(volumes[-1]) if volumes else None),
+            market_cap=None,
+            trailing_pe=None,
+        )
 
     def _fetch_quote_from_ticker(self, symbol: str, yahoo_symbol: str, ticker: object) -> YahooFinanceQuote:
         fast_info = _read_field(ticker, "fast_info") or {}
@@ -249,21 +280,29 @@ class YahooFinanceMarketData:
     def ingest_session_bars(self, as_of_time: datetime) -> None:
         for symbol in self.symbols:
             yahoo_symbol = self.resolve_symbol(symbol)
-            ticker = self._ticker_factory(yahoo_symbol)
-            intraday = ticker.history(
-                period=self.intraday_period,
-                interval=self.intraday_interval,
-                auto_adjust=False,
-                prepost=True,
-            )
-            daily = ticker.history(
-                period=self.daily_period,
-                interval="1d",
-                auto_adjust=False,
-                prepost=False,
-            )
-            quote = self._fetch_quote_from_ticker(symbol, yahoo_symbol, ticker)
-            self.quote_cache[symbol] = quote
+            if self._custom_ticker_factory:
+                ticker = self._ticker_factory(yahoo_symbol)
+                intraday = ticker.history(
+                    period=self.intraday_period,
+                    interval=self.intraday_interval,
+                    auto_adjust=False,
+                    prepost=True,
+                )
+                daily = ticker.history(
+                    period=self.daily_period,
+                    interval="1d",
+                    auto_adjust=False,
+                    prepost=False,
+                )
+                quote = self._fetch_quote_from_ticker(symbol, yahoo_symbol, ticker)
+                self.quote_cache[symbol] = quote
+            else:
+                intraday = self._history_from_chart(
+                    self._request_chart(yahoo_symbol, range_value=self.intraday_period, interval=self.intraday_interval)
+                )
+                daily = self._history_from_chart(self._request_chart(yahoo_symbol, range_value=self.daily_period, interval="1d"))
+                quote = self._fetch_quote_from_chart(symbol, yahoo_symbol)
+                self.quote_cache[symbol] = quote
             features = self._build_features(symbol, yahoo_symbol, intraday, daily, quote)
             self.feature_store.put(
                 NumericFeatureRow(
@@ -389,3 +428,43 @@ class YahooFinanceMarketData:
             "missing_flags": missing_flags,
             "stale_flags": stale_flags,
         }
+
+    @staticmethod
+    def _history_from_chart(chart_payload: Mapping[str, object]) -> dict[str, list[object]]:
+        indicators = _as_mapping(chart_payload.get("indicators"))
+        quote_list = indicators.get("quote") or []
+        first_quote = quote_list[0] if isinstance(quote_list, list) and quote_list else {}
+        quote = _as_mapping(first_quote)
+        return {
+            "Open": list(quote.get("open") or []),
+            "High": list(quote.get("high") or []),
+            "Low": list(quote.get("low") or []),
+            "Close": list(quote.get("close") or []),
+            "Volume": list(quote.get("volume") or []),
+        }
+
+    @staticmethod
+    def _request_chart(yahoo_symbol: str, *, range_value: str, interval: str) -> Mapping[str, object]:
+        try:
+            import requests
+        except ImportError as exc:  # pragma: no cover - depends on local install
+            raise YahooFinanceUnavailableError(
+                "requests is not installed. Install market data extras with `pip install -e .[marketdata]`."
+            ) from exc
+
+        response = requests.get(
+            f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_symbol}",
+            params={"range": range_value, "interval": interval, "includePrePost": "true"},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=20,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        chart = _as_mapping(payload.get("chart"))
+        error = chart.get("error")
+        if error:
+            raise ValueError(f"Yahoo chart API error for {yahoo_symbol}: {error}")
+        result = chart.get("result") or []
+        if not isinstance(result, list) or not result:
+            raise ValueError(f"Yahoo chart API returned no result for {yahoo_symbol}")
+        return _as_mapping(result[0])
