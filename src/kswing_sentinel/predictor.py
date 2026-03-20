@@ -11,9 +11,8 @@ class NumericFirstPredictor:
         trend_120m = float(features.get("trend_120m", 0.0))
         extension = float(features.get("extension_60m", 0.0))
         event_score = float(features.get("event_score", 0.0))
-        vector_energy = float(features.get("vector_energy", 0.0))
-        uncertainty = min(1.0, max(0.0, 0.35 + 0.25 * abs(extension) + 0.1 * max(0.0, 0.3 - vector_energy)))
-        er20 = 0.01 + 0.02 * flow_strength + 0.015 * trend_120m + 0.01 * event_score + 0.005 * vector_energy - 0.01 * max(extension, 0)
+        uncertainty = min(1.0, max(0.0, 0.35 + 0.25 * abs(extension)))
+        er20 = 0.01 + 0.02 * flow_strength + 0.015 * trend_120m + 0.01 * event_score - 0.01 * max(extension, 0)
         er5 = er20 * 0.45
         dd20 = max(0.01, 0.05 - 0.02 * trend_120m + 0.015 * max(extension, 0))
         pup = min(0.95, max(0.05, 0.5 + er20 * 2.0))

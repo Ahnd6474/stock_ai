@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 import pytest
-from kswing_sentinel.pydantic_compat import ValidationError
+from pydantic import ValidationError
 
 from kswing_sentinel.schemas import LLMNormalizedEvent
 

@@ -17,7 +17,7 @@ def classify_session(ts: datetime) -> SessionType:
         return "NXT_PRE"
     if 9 * 60 <= hm < 15 * 60 + 20:
         return "CORE_DAY"
-    if 15 * 60 + 30 <= hm < 15 * 60 + 40:
+    if 15 * 60 + 30 <= hm < 16 * 60:
         return "CLOSE_PRICE"
     if 15 * 60 + 40 <= hm < 20 * 60:
         return "NXT_AFTER"

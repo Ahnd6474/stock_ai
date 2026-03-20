@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from kswing_sentinel.pydantic_compat import BaseModel, Field
+from pydantic import BaseModel, Field
 
 SessionType = Literal["NXT_PRE", "CORE_DAY", "CLOSE_PRICE", "NXT_AFTER", "OFF_MARKET"]
 VenueEligibility = Literal["KRX_ONLY", "KRX_PLUS_NXT"]
