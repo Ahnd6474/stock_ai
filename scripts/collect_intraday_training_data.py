@@ -6,26 +6,26 @@ from kswing_sentinel.intraday_dataset import collect_multi_timeframe_training_ro
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Collect small daily, hourly, and 15-minute training datasets.")
+    parser = argparse.ArgumentParser(description="Collect large daily, hourly, and 15-minute feature datasets.")
     parser.add_argument(
         "--symbols",
         nargs="+",
-        default=["005930", "000660"],
-        help="KRX symbols to download. Keep this small for test runs.",
+        default=["005930", "000660", "035420", "051910", "005380", "068270"],
+        help="KRX symbols to download.",
     )
     parser.add_argument(
         "--daily-period",
-        default="1y",
-        help="Yahoo period for daily download. Example: 6mo, 1y, 2y.",
+        default="10y",
+        help="Yahoo period for daily download. Example: 1y, 5y, 10y, max.",
     )
     parser.add_argument(
         "--hourly-period",
-        default="120d",
-        help="Yahoo period for 60m download. Example: 30d, 60d, 120d.",
+        default="730d",
+        help="Yahoo period for 60m download. Example: 60d, 120d, 730d.",
     )
     parser.add_argument(
         "--intraday-period",
-        default="30d",
+        default="60d",
         help="Yahoo period for 15m download. Example: 5d, 30d, 60d.",
     )
     parser.add_argument(

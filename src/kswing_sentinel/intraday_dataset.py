@@ -850,9 +850,7 @@ def save_multi_timeframe_training_rows(
     summaries: dict[str, IntradayCollectionSummary] = {}
     for timeframe, rows in rows_by_timeframe.items():
         suffix = timeframe.replace("m", "min").replace("d", "day")
-        feature_rows, label_rows = split_feature_and_label_rows(rows)
+        feature_rows, _ = split_feature_and_label_rows(rows)
         feature_path = output_root / f"{prefix}_{suffix}_features.csv"
-        label_path = output_root / f"{prefix}_{suffix}_labels.csv"
-        save_intraday_training_rows(label_rows, label_path)
         summaries[timeframe] = save_intraday_training_rows(feature_rows, feature_path)
     return summaries
