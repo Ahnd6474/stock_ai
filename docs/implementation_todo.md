@@ -5,6 +5,51 @@
 
 ---
 
+## 2026-03-20 재평가 스냅샷 (Baseline 인정 + 실전 미달)
+
+- 저장소 구조/모듈 분리: **7/10**
+- 실행·세션·라우팅 골격: **5/10**
+- 백테스트/라벨 정합성: **4/10**
+- 예측 모델 실제성: **2/10**
+- 텍스트/LLM/벡터 실질성: **2/10**
+- 리스크/포트폴리오: **4/10**
+- 운영/감사/모니터링: **3/10**
+- 실거래 가능성: **1/10**
+
+**총평:** "좋은 설계문서를 따라 만든 구현 스캐폴드 + 일부 toy implementation".
+
+### 우선순위 고정 원칙 (순서 변경 금지)
+1. `calendar.py`
+2. `session_rules.py`
+3. `execution_mapper.py`
+4. `label_builder.py`
+5. `backtester.py`
+6. `cost_model.py`
+7. `nxt_eligibility_store.py`
+8. `venue_router.py`
+9. `broker_gateway.py`
+10. `training.py`
+11. `predictor.py`
+12. calibration
+13. `feature_store.py`
+14. `risk_engine.py`
+15. `portfolio_engine.py`
+16. `event_store.py`
+17. `llm_event_normalizer.py`
+18. `text_encoder.py`
+19. `attention_aggregator.py`
+20. `vectorization.py`
+21. `live.py`
+22. `orchestration.py`
+23. `monitoring.py`
+
+### 즉시 반영된 공통 요구사항
+- 모든 항목 완료 조건에 테스트 증적을 강제한다.
+- `execution_mapper` / `label_builder` / `backtester`는 동일한 실행 규칙 소스를 공유해야 한다.
+- `predictor.py`는 하드코딩 baseline 제거를 목표로 artifact + calibrator 경로를 기본 지원한다.
+
+---
+
 ## Execution Rules (필수)
 
 - 상태값은 `NOT_STARTED -> IN_PROGRESS -> BLOCKED -> DONE`만 사용.

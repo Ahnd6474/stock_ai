@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import json
 from pathlib import Path
+from typing import Any
 
 from .calibration import ProbabilityCalibrator, QuantileAdjuster
 from .schemas import FusedPrediction
@@ -16,8 +17,27 @@ class ModelArtifact:
 
 
 class NumericFirstPredictor:
-    def __init__(self, artifact: ModelArtifact | None = None) -> None:
+    def __init__(
+        self,
+        artifact: ModelArtifact | None = None,
+        model_blob: dict[str, Any] | None = None,
+        artifact_path: str | Path | None = None,
+        p_up_calibrator: ProbabilityCalibrator | None = None,
+        dd_adjuster: QuantileAdjuster | None = None,
+    ) -> None:
         self.artifact = artifact or ModelArtifact(model_version="numeric_baseline_v1")
+        self.model_blob = model_blob or self._load_model_blob(artifact_path)
+        self.p_up_calibrator = p_up_calibrator or ProbabilityCalibrator()
+        self.dd_adjuster = dd_adjuster or QuantileAdjuster()
+
+    def _load_model_blob(self, artifact_path: str | Path | None) -> dict[str, Any]:
+        if artifact_path is None:
+            return {}
+        path = Path(artifact_path)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("artifact payload must be a JSON object")
+        return payload
 
     def validate_schema(self, features: dict) -> None:
         required = {"flow_strength", "trend_120m", "extension_60m"}
