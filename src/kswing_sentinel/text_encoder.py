@@ -5,9 +5,11 @@ import math
 import re
 from typing import Any
 
+DEFAULT_KOREAN_ROBERTA_MODEL_ID = "klue/roberta-base"
+
 
 def _tokenize_ko_en(text: str) -> list[str]:
-    return re.findall(r"[가-힣A-Za-z0-9_]+", text.lower())
+    return re.findall(r"[A-Za-z0-9_]+|[가-힣]+", text.lower())
 
 
 def _normalize_vector(values: list[float]) -> list[float]:
@@ -56,8 +58,8 @@ class KoreanTextEncoder:
     def __init__(
         self,
         *,
-        model_id: str = "snunlp/KR-SBERT-V40K-klueNLI-augSTS",
-        encoder_version: str = "ko_bert_v2",
+        model_id: str = DEFAULT_KOREAN_ROBERTA_MODEL_ID,
+        encoder_version: str = "ko_roberta_v1",
         tokenizer_version: str = "auto",
         backend: str = "auto",
         device: str = "cpu",
@@ -70,10 +72,11 @@ class KoreanTextEncoder:
         self.device = device
         self.max_length = max_length
         self._runtime_backend = "hashing_bow_v1"
+        self._model_family = "hashing"
         self._tokenizer: Any = None
         self._model: Any = None
         self._torch: Any = None
-        if self.backend in {"auto", "transformers"}:
+        if self.backend in {"auto", "transformers", "roberta"}:
             self._load_transformers()
 
     def _load_transformers(self) -> None:
@@ -82,6 +85,7 @@ class KoreanTextEncoder:
             from transformers import AutoModel, AutoTokenizer
         except Exception:
             self._runtime_backend = "hashing_bow_v1"
+            self._model_family = "hashing"
             return
 
         try:
@@ -91,7 +95,13 @@ class KoreanTextEncoder:
             if self.device:
                 self._model.to(self.device)
             self._torch = torch
-            self._runtime_backend = "transformers_mean_pool_v1"
+            model_type = str(getattr(getattr(self._model, "config", None), "model_type", "")).lower()
+            if model_type == "roberta":
+                self._runtime_backend = "roberta_mean_pool_v1"
+                self._model_family = "roberta"
+            else:
+                self._runtime_backend = "transformers_mean_pool_v1"
+                self._model_family = model_type or "transformers"
             if self.tokenizer_version == "auto":
                 self.tokenizer_version = str(self.model_id)
         except Exception:
@@ -99,6 +109,7 @@ class KoreanTextEncoder:
             self._model = None
             self._torch = None
             self._runtime_backend = "hashing_bow_v1"
+            self._model_family = "hashing"
 
     def _encode_transformers_batch(self, texts: list[str], dim: int) -> list[list[float]]:
         if self._model is None or self._tokenizer is None or self._torch is None:
@@ -126,11 +137,12 @@ class KoreanTextEncoder:
         return self.batch_encode([text], dim=dim)[0]
 
     def batch_encode(self, texts: list[str], dim: int) -> list[list[float]]:
-        if self._runtime_backend == "transformers_mean_pool_v1":
+        if self._runtime_backend in {"transformers_mean_pool_v1", "roberta_mean_pool_v1"}:
             try:
                 return self._encode_transformers_batch(texts, dim)
             except Exception:
                 self._runtime_backend = "hashing_bow_v1"
+                self._model_family = "hashing"
         return [_hashing_embedding(text, dim) for text in texts]
 
     def metadata(self) -> dict:
@@ -138,5 +150,6 @@ class KoreanTextEncoder:
             "encoder_version": self.encoder_version,
             "tokenizer_version": self.tokenizer_version,
             "model_id": self.model_id,
+            "model_family": self._model_family,
             "embedding_backend": self._runtime_backend,
         }

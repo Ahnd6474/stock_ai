@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from .attention_aggregator import HierarchicalAttentionAggregator
-from .text_encoder import KoreanTextEncoder
+from .text_encoder import DEFAULT_KOREAN_ROBERTA_MODEL_ID, KoreanTextEncoder
 
 
 def _chunk_text(text: str, chunk_chars: int = 220, overlap_chars: int = 40) -> list[str]:
@@ -29,15 +29,18 @@ class VectorizationPipeline:
         *,
         encoder: KoreanTextEncoder | None = None,
         aggregator: HierarchicalAttentionAggregator | None = None,
-        encoder_version: str = "ko_bert_v2",
+        model_id: str = DEFAULT_KOREAN_ROBERTA_MODEL_ID,
+        encoder_version: str = "ko_roberta_v1",
         tokenizer_version: str = "auto",
+        encoder_backend: str = "roberta",
         attention_aggregator_version: str = "hier_attn_v2",
         prompt_version: str = "prompt_v1",
     ) -> None:
         self.encoder = encoder or KoreanTextEncoder(
+            model_id=model_id,
             encoder_version=encoder_version,
             tokenizer_version=tokenizer_version,
-            backend="auto",
+            backend=encoder_backend,
         )
         self.aggregator = aggregator or HierarchicalAttentionAggregator()
         self.attention_aggregator_version = attention_aggregator_version
