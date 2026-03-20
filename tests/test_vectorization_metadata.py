@@ -10,7 +10,7 @@ def test_roberta_encoder_metadata_defaults_to_roberta_or_hashing_fallback():
 
     assert metadata["model_id"] == DEFAULT_KOREAN_ROBERTA_MODEL_ID
     assert metadata["encoder_version"].startswith("ko_roberta")
-    assert metadata["embedding_backend"] in {"hashing_bow_v1", "roberta_mean_pool_v1"}
+    assert metadata["embedding_backend"] in {"hashing_bow_v1", "roberta_mean_pool_v2"}
 
 
 def test_vectorization_returns_metadata_versions():
@@ -23,7 +23,7 @@ def test_vectorization_returns_metadata_versions():
     assert len(v["z_event"]) == 64
     assert v["metadata"]["embedding_backend"] in {
         "hashing_bow_v1",
-        "roberta_mean_pool_v1",
+        "roberta_mean_pool_v2",
         "transformers_mean_pool_v1",
     }
     assert v["metadata"]["encoder_version"].startswith("ko_roberta")

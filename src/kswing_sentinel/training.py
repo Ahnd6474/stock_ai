@@ -5,6 +5,16 @@ from datetime import date
 import json
 from pathlib import Path
 from statistics import mean
+from typing import Any
+
+try:
+    import torch
+    from torch import nn
+except Exception:  # pragma: no cover - optional dependency
+    torch = None
+    nn = None
+
+from .text_encoder import DEFAULT_KOREAN_ROBERTA_MODEL_ID, TrainableRobertaEncoder
 
 
 @dataclass(frozen=True)
@@ -20,6 +30,40 @@ class Fold:
     train_end: date
     valid_start: date
     valid_end: date
+
+
+@dataclass(frozen=True)
+class EpochLoss:
+    epoch: int
+    loss: float
+
+
+class RobertaTextRegressor(nn.Module if nn is not None else object):
+    def __init__(
+        self,
+        *,
+        encoder: TrainableRobertaEncoder | None = None,
+        model_id: str = DEFAULT_KOREAN_ROBERTA_MODEL_ID,
+        projection_dim: int | None = 128,
+        dropout: float = 0.1,
+        device: str = "cpu",
+        train_backbone: bool = True,
+    ) -> None:
+        if nn is None or torch is None:
+            raise RuntimeError("torch is required for RoBERTa fine-tuning")
+        super().__init__()
+        self.encoder = encoder or TrainableRobertaEncoder(
+            model_id=model_id,
+            device=device,
+            projection_dim=projection_dim,
+            dropout=dropout,
+            train_backbone=train_backbone,
+        )
+        self.head = nn.Linear(self.encoder.output_dim, 1)
+
+    def forward_texts(self, texts: list[str]) -> Any:
+        embeddings = self.encoder.forward_texts(texts)
+        return self.head(embeddings).squeeze(-1)
 
 
 class WalkForwardSplitter:
@@ -167,3 +211,88 @@ class TrainingPipeline:
         path = out / "multi_head_artifact.json"
         path.write_text(json.dumps(artifact, ensure_ascii=False, indent=2), encoding="utf-8")
         return path
+
+    def train_text_regressor(
+        self,
+        rows: list[dict],
+        *,
+        text_key: str,
+        label_key: str,
+        artifact_dir: str | Path,
+        model: Any | None = None,
+        model_id: str = DEFAULT_KOREAN_ROBERTA_MODEL_ID,
+        projection_dim: int | None = 128,
+        batch_size: int = 4,
+        epochs: int = 1,
+        lr: float = 2e-5,
+        device: str = "cpu",
+        train_backbone: bool = True,
+        model_version: str = "roberta_text_regressor_v1",
+    ) -> tuple[Path, Path, Path]:
+        if nn is None or torch is None:
+            raise RuntimeError("torch is required for RoBERTa fine-tuning")
+
+        dataset = [
+            {"text": str(row[text_key]), "y": float(row[label_key])}
+            for row in rows
+            if text_key in row and label_key in row
+        ]
+        if not dataset:
+            raise ValueError("text regression dataset is empty")
+
+        regressor = model or RobertaTextRegressor(
+            model_id=model_id,
+            projection_dim=projection_dim,
+            device=device,
+            train_backbone=train_backbone,
+        )
+        if hasattr(regressor, "to"):
+            regressor.to(device)
+        if hasattr(regressor, "train"):
+            regressor.train()
+
+        params = [param for param in regressor.parameters() if param.requires_grad]
+        optimizer = torch.optim.AdamW(params, lr=lr)
+        loss_fn = nn.MSELoss()
+        metrics: list[EpochLoss] = []
+
+        for epoch in range(epochs):
+            epoch_losses: list[float] = []
+            for start in range(0, len(dataset), batch_size):
+                batch = dataset[start : start + batch_size]
+                texts = [row["text"] for row in batch]
+                targets = torch.tensor([row["y"] for row in batch], dtype=torch.float32, device=device)
+                optimizer.zero_grad()
+                predictions = regressor.forward_texts(texts)
+                if predictions.ndim > 1:
+                    predictions = predictions.squeeze(-1)
+                loss = loss_fn(predictions, targets)
+                loss.backward()
+                optimizer.step()
+                epoch_losses.append(float(loss.detach().cpu()))
+            metrics.append(EpochLoss(epoch=epoch + 1, loss=mean(epoch_losses) if epoch_losses else 0.0))
+
+        out_dir = Path(artifact_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        weights_path = out_dir / "text_regressor_weights.pt"
+        artifact_path = out_dir / "text_regressor_artifact.json"
+        metrics_path = out_dir / "text_regressor_metrics.json"
+        torch.save(regressor.state_dict(), weights_path)
+        artifact_payload = {
+            "model_version": model_version,
+            "text_key": text_key,
+            "label_key": label_key,
+            "encoder_model_id": getattr(getattr(regressor, "encoder", None), "model_id", model_id),
+            "projection_dim": projection_dim,
+            "train_backbone": train_backbone,
+            "batch_size": batch_size,
+            "epochs": epochs,
+            "learning_rate": lr,
+            "weights_path": str(weights_path),
+        }
+        artifact_path.write_text(json.dumps(artifact_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        metrics_path.write_text(
+            json.dumps([metric.__dict__ for metric in metrics], ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return weights_path, artifact_path, metrics_path

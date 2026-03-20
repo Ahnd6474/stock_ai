@@ -7,7 +7,7 @@ The repository currently focuses on strict schemas, deterministic session handli
 
 Status checked on 2026-03-21: this repository is an executable scaffold, not just a planning document.
 
-- Test status: `python -m pytest -q` -> `69 passed`
+- Test status: `python -m pytest -q` -> `70 passed`
 - Verified runtime: Python `3.12.10`
 - Repository state: core domain logic and guardrails are implemented, while live market/broker connectivity is still partial
 
@@ -20,7 +20,8 @@ Status checked on 2026-03-21: this repository is an executable scaffold, not jus
 - Walk-forward training scaffold with artifact export
 - Numeric-first predictor that can load local JSON model artifacts
 - LLM event normalizer with strict structured-output validation and degraded fallback
-- RoBERTa-based text vectorization pipeline with hierarchical aggregation and hashing fallback
+- RoBERTa-based text vectorization pipeline with hierarchical aggregation, local model download support, and hashing fallback
+- Trainable RoBERTa text-regression path so the backbone can be fine-tuned instead of using fixed embeddings
 - Production readiness gate, runtime audit logging, monitoring, and orchestration helpers
 - Data collection scripts for FinanceDataReader and Yahoo-based training samples
 - Example runtime/config files and sample training datasets under `data/training/`
@@ -30,6 +31,7 @@ Status checked on 2026-03-21: this repository is an executable scaffold, not jus
 - Live inference flow exists, but real production deployment still depends on external market data, broker APIs, and environment configuration
 - LLM integration supports OpenRouter-compatible providers, but API keys are not stored in the repository
 - RoBERTa mean-pooling activates when `transformers` and `torch` are installed; otherwise the encoder falls back to hashing-based embeddings
+- The new text fine-tuning path is minimal and task-specific; it is not yet wired into the numeric predictor or live runtime by default
 - Predictor/training pipeline is a lightweight baseline scaffold, not yet a production-grade LightGBM/CatBoost stack
 - Backtesting supports execution parity and session-aware cost handling, but is not yet a full event-driven portfolio simulator
 

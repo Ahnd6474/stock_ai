@@ -30,7 +30,7 @@ class VectorizationPipeline:
         encoder: KoreanTextEncoder | None = None,
         aggregator: HierarchicalAttentionAggregator | None = None,
         model_id: str = DEFAULT_KOREAN_ROBERTA_MODEL_ID,
-        encoder_version: str = "ko_roberta_v1",
+        encoder_version: str = "ko_roberta_v2",
         tokenizer_version: str = "auto",
         encoder_backend: str = "roberta",
         attention_aggregator_version: str = "hier_attn_v2",

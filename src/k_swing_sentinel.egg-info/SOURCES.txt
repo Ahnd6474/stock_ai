@@ -22,6 +22,7 @@ src/kswing_sentinel/execution_mapper.py
 src/kswing_sentinel/fdr_dataset.py
 src/kswing_sentinel/feature_store.py
 src/kswing_sentinel/flow_snapshot_store.py
+src/kswing_sentinel/intraday_dataset.py
 src/kswing_sentinel/label_builder.py
 src/kswing_sentinel/live.py
 src/kswing_sentinel/llm_event_normalizer.py
@@ -54,6 +55,7 @@ tests/test_execution_mapper_conservative.py
 tests/test_fdr_dataset.py
 tests/test_feature_store_context.py
 tests/test_flow_leakage.py
+tests/test_intraday_dataset.py
 tests/test_label_builder.py
 tests/test_label_builder_extensions.py
 tests/test_llm_provider_path.py
