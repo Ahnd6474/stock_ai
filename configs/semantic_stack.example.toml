@@ -1,9 +1,15 @@
+[search]
+provider = "internal_context_only"
+max_results = 5
+
 [llm]
-provider = "xai_openai_compatible"
-base_url = "https://api.x.ai/v1"
-model = "grok-4-fast-reasoning"
-api_key_env = "XAI_API_KEY"
-prompt_version = "normalizer_prompt_v1"
+provider = "openrouter_single"
+base_url = "https://openrouter.ai/api/v1"
+api_key_env = "OPENROUTER_API_KEY"
+prompt_version = "normalizer_prompt_v2"
+app_name = "K-Swing Sentinel"
+referer = "https://local.kswing-sentinel"
+model = "x-ai/grok-4.1-fast"
 
 [encoder]
 backend = "auto"

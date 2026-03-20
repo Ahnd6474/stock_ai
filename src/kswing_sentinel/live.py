@@ -4,7 +4,11 @@ from datetime import datetime
 
 from .decision_engine import DecisionEngine
 from .execution_mapper import ExecutionMapper
-from .llm_event_normalizer import LLMEventNormalizer
+from .llm_event_normalizer import (
+    InternalContextSearchClient,
+    LLMEventNormalizer,
+    build_grok_only_market_llm_provider,
+)
 from .predictor import NumericFirstPredictor
 from .schemas import ExecutionRequest
 from .session_rules import classify_session
@@ -12,11 +16,21 @@ from .vectorization import VectorizationPipeline
 
 
 class LiveInferenceService:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        normalizer: LLMEventNormalizer | None = None,
+        vectorizer: VectorizationPipeline | None = None,
+        predictor: NumericFirstPredictor | None = None,
+    ) -> None:
         self.mapper = ExecutionMapper()
-        self.normalizer = LLMEventNormalizer()
-        self.vectorizer = VectorizationPipeline()
-        self.predictor = NumericFirstPredictor()
+        self.normalizer = normalizer or LLMEventNormalizer(
+            prompt_version="normalizer_prompt_v2",
+            provider=build_grok_only_market_llm_provider(),
+            search_client=InternalContextSearchClient(),
+        )
+        self.vectorizer = vectorizer or VectorizationPipeline()
+        self.predictor = predictor or NumericFirstPredictor()
         self.decider = DecisionEngine()
         self._semantic_cache: dict[str, tuple[datetime, float]] = {}
         self.anchor_schedule = ["08:10", "08:40", "09:35", "12:30", "15:10", "15:35", "15:45", "18:30", "19:40", "20:05"]

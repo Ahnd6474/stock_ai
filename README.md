@@ -37,6 +37,14 @@ For actual semantic stack wiring:
 pip install -e .[dev,llm,ml]
 ```
 
+Default semantic stack example:
+
+- Search: internal context only
+- Reasoning: `x-ai/grok-4.1-fast`
+
+API keys are intentionally not stored in the repository.
+Set `OPENROUTER_API_KEY` in your runtime environment instead.
+
 ## Roadmap
 
 - GitHub issue 초안: `docs/ROADMAP_GITHUB_ISSUES.md`

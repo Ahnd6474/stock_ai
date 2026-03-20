@@ -7,12 +7,10 @@
     <list default="true" id="1bb7c9f3-3fe9-4c50-b759-5b4f3369fa8f" name="변경" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/semantic_stack.example.toml" beforeDir="false" afterPath="$PROJECT_DIR$/configs/semantic_stack.example.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/live.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/live.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/llm_event_normalizer.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/llm_event_normalizer.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/text_encoder.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/text_encoder.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/vectorization.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/vectorization.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_vectorization_metadata.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_vectorization_metadata.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_llm_provider_path.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_llm_provider_path.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -20,7 +18,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="66" />
+    <option name="cachedIndexableFilesCount" value="76" />
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -53,6 +51,7 @@
   "keyToString": {
     "RunOnceActivity.MCP Project settings loaded": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "ai.playground.ignore.import.keys.banner.in.settings": "true",
@@ -82,7 +81,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1773980457174</updated>
-      <workItem from="1773980517589" duration="3000000" />
+      <workItem from="1773980517589" duration="5917000" />
     </task>
     <servers />
   </component>
