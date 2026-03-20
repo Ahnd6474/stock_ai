@@ -20,6 +20,7 @@ This repository now contains a working Python scaffold implementing the producti
 - Example JSON payloads: `src/kswing_sentinel/example_payloads.py`
 - Production readiness and live gate: `src/kswing_sentinel/production_runtime.py`
 - Example live config: `configs/production_runtime.example.toml`
+- Example semantic stack config: `configs/semantic_stack.example.toml`
 
 ## Quick start
 
@@ -28,6 +29,12 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e .[dev]
 pytest -q
+```
+
+For actual semantic stack wiring:
+
+```bash
+pip install -e .[dev,llm,ml]
 ```
 
 ## Roadmap

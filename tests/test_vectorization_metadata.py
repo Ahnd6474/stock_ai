@@ -11,7 +11,7 @@ def test_vectorization_returns_metadata_versions():
         as_of_time=datetime(2026, 3, 20, tzinfo=timezone.utc),
     )
     assert len(v["z_event"]) == 64
-    assert v["metadata"]["embedding_backend"] == "hashing_bow_v1"
+    assert v["metadata"]["embedding_backend"] in {"hashing_bow_v1", "transformers_mean_pool_v1"}
     assert v["metadata"]["encoder_version"].startswith("ko_bert")
 
 

@@ -1,0 +1,12 @@
+[llm]
+provider = "xai_openai_compatible"
+base_url = "https://api.x.ai/v1"
+model = "grok-4-fast-reasoning"
+api_key_env = "XAI_API_KEY"
+prompt_version = "normalizer_prompt_v1"
+
+[encoder]
+backend = "auto"
+model_id = "snunlp/KR-SBERT-V40K-klueNLI-augSTS"
+device = "cpu"
+max_length = 256

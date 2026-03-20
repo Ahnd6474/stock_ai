@@ -26,11 +26,22 @@ class LiveInferenceService:
                        session_liquidity_ok: bool = True, no_position: bool = True):
         session = classify_session(as_of_time)
         sem = self.normalizer.normalize(raw_event_payload)
-        _ = self.vectorizer.build(sem.canonical_summary, source_doc_ids=[], cluster_ids=[], as_of_time=as_of_time, session_type=session)
         features = dict(features)
+        try:
+            _ = self.vectorizer.build(
+                sem.canonical_summary,
+                source_doc_ids=list(getattr(sem, "source_doc_ids", []) or []),
+                cluster_ids=[getattr(sem, "cluster_id", "default")] if getattr(sem, "cluster_id", None) else [],
+                as_of_time=as_of_time,
+                session_type=session,
+            )
+            features.setdefault("text_branch_enabled", True)
+        except Exception:
+            features["text_branch_enabled"] = False
         features.setdefault("flow_strength", 0.0)
         features.setdefault("trend_120m", 0.0)
         features.setdefault("extension_60m", 0.0)
+        features.setdefault("semantic_branch_enabled", sem.semantic_confidence > 0.0)
         features["event_score"] = sem.event_score
         pred = self.predictor.predict(symbol, session, as_of_time, features)
         req = ExecutionRequest(

@@ -5,17 +5,14 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="1bb7c9f3-3fe9-4c50-b759-5b4f3369fa8f" name="변경" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/audit_log.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/audit_log.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/broker_gateway.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/broker_gateway.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/decision_engine.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/decision_engine.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/execution_mapper.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/execution_mapper.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/label_builder.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/label_builder.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/monitoring.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/monitoring.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/predictor.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/predictor.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/risk_engine.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/risk_engine.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/schemas.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/schemas.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_label_builder.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_label_builder.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/live.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/live.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/llm_event_normalizer.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/llm_event_normalizer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/text_encoder.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/text_encoder.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/vectorization.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/vectorization.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_vectorization_metadata.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_vectorization_metadata.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -85,7 +82,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1773980457174</updated>
-      <workItem from="1773980517589" duration="1465000" />
+      <workItem from="1773980517589" duration="3000000" />
     </task>
     <servers />
   </component>
