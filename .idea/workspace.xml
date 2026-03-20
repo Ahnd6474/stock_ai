@@ -5,12 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="1bb7c9f3-3fe9-4c50-b759-5b4f3369fa8f" name="변경" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/configs/semantic_stack.example.toml" beforeDir="false" afterPath="$PROJECT_DIR$/configs/semantic_stack.example.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/live.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/live.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/llm_event_normalizer.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/llm_event_normalizer.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_llm_provider_path.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_llm_provider_path.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -55,7 +50,7 @@
     "RunOnceActivity.git.unshallow": "true",
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "ai.playground.ignore.import.keys.banner.in.settings": "true",
-    "git-widget-placeholder": "main",
+    "git-widget-placeholder": "main 병합 중",
     "ignore.virus.scanning.warn.message": "true",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
@@ -81,7 +76,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1773980457174</updated>
-      <workItem from="1773980517589" duration="5917000" />
+      <workItem from="1773980517589" duration="6226000" />
     </task>
     <servers />
   </component>
