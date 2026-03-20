@@ -81,6 +81,93 @@ def _ratio(numerator: float | None, denominator: float | None) -> float:
     return numerator / denominator - 1.0
 
 
+def _sma(values: Sequence[float], window: int) -> float | None:
+    if len(values) < window:
+        return None
+    return _mean(values[-window:])
+
+
+def _ema_series(values: Sequence[float], window: int) -> list[float]:
+    if not values:
+        return []
+    alpha = 2.0 / (window + 1.0)
+    ema_values = [float(values[0])]
+    for value in values[1:]:
+        ema_values.append(alpha * float(value) + (1.0 - alpha) * ema_values[-1])
+    return ema_values
+
+
+def _ema(values: Sequence[float], window: int) -> float | None:
+    series = _ema_series(values, window)
+    return series[-1] if len(series) >= window else None
+
+
+def _stddev(values: Sequence[float], window: int) -> float | None:
+    if len(values) < window:
+        return None
+    sample = list(values[-window:])
+    avg = _mean(sample)
+    if avg is None:
+        return None
+    variance = sum((value - avg) ** 2 for value in sample) / len(sample)
+    return math.sqrt(variance)
+
+
+def _macd(values: Sequence[float]) -> tuple[float | None, float | None, float | None]:
+    if len(values) < 26:
+        return None, None, None
+    ema_12_series = _ema_series(values, 12)
+    ema_26_series = _ema_series(values, 26)
+    macd_series = [fast - slow for fast, slow in zip(ema_12_series, ema_26_series)]
+    signal_series = _ema_series(macd_series, 9)
+    if len(signal_series) < 9:
+        return None, None, None
+    macd_value = macd_series[-1]
+    signal_value = signal_series[-1]
+    return macd_value, signal_value, macd_value - signal_value
+
+
+def _rsi(values: Sequence[float], window: int = 14) -> float | None:
+    if len(values) <= window:
+        return None
+    gains: list[float] = []
+    losses: list[float] = []
+    for prev, cur in zip(values[:-1], values[1:]):
+        delta = cur - prev
+        gains.append(max(delta, 0.0))
+        losses.append(max(-delta, 0.0))
+    avg_gain = _mean(gains[-window:])
+    avg_loss = _mean(losses[-window:])
+    if avg_gain is None or avg_loss is None:
+        return None
+    if avg_loss == 0:
+        return 100.0
+    rs = avg_gain / avg_loss
+    return 100.0 - (100.0 / (1.0 + rs))
+
+
+def _bollinger_band_width(values: Sequence[float], window: int = 20, num_std: float = 2.0) -> float | None:
+    center = _sma(values, window)
+    std = _stddev(values, window)
+    if center in {None, 0.0} or std is None:
+        return None
+    upper = center + num_std * std
+    lower = center - num_std * std
+    return (upper - lower) / center
+
+
+def _atr(highs: Sequence[float], lows: Sequence[float], closes: Sequence[float], window: int = 14) -> float | None:
+    if len(highs) < window or len(lows) < window or len(closes) < window + 1:
+        return None
+    true_ranges: list[float] = []
+    for idx in range(1, len(closes)):
+        high = float(highs[idx])
+        low = float(lows[idx])
+        prev_close = float(closes[idx - 1])
+        true_ranges.append(max(high - low, abs(high - prev_close), abs(low - prev_close)))
+    return _mean(true_ranges[-window:])
+
+
 def resolve_yahoo_symbol(
     symbol: str,
     *,
@@ -381,6 +468,8 @@ class YahooFinanceMarketData:
     ) -> dict[str, object]:
         intraday_closes = _series_values(intraday_history, "Close")
         daily_closes = _series_values(daily_history, "Close")
+        daily_highs = _series_values(daily_history, "High")
+        daily_lows = _series_values(daily_history, "Low")
         daily_volumes = _series_values(daily_history, "Volume")
 
         last_intraday = intraday_closes[-1] if intraday_closes else None
@@ -393,6 +482,14 @@ class YahooFinanceMarketData:
         extension_anchor = _mean(intraday_closes[-12:]) if len(intraday_closes) >= 12 else None
         volume_mean = _mean(daily_volumes[-20:]) if len(daily_volumes) >= 20 else _mean(daily_volumes)
         latest_volume = daily_volumes[-1] if daily_volumes else _coerce_float(quote.volume)
+        sma_20 = _sma(daily_closes, 20)
+        sma_60 = _sma(daily_closes, 60)
+        ema_12 = _ema(daily_closes, 12)
+        ema_26 = _ema(daily_closes, 26)
+        macd_value, macd_signal, macd_hist = _macd(daily_closes)
+        rsi_14 = _rsi(daily_closes, 14)
+        bb_width_20 = _bollinger_band_width(daily_closes, 20)
+        atr_14 = _atr(daily_highs, daily_lows, daily_closes, 14)
 
         stale_flags = {
             "intraday_history_short": len(intraday_closes) < 25,
@@ -422,6 +519,18 @@ class YahooFinanceMarketData:
             "gap_from_prev_close": _ratio(last_price, previous_close),
             "return_20d": _ratio(last_price, daily_closes[-21] if len(daily_closes) >= 21 else None),
             "volume_ratio_20d": 0.0 if latest_volume is None or volume_mean in {None, 0.0} else latest_volume / volume_mean,
+            "sma_20": sma_20,
+            "sma_60": sma_60,
+            "price_vs_sma20": _ratio(last_price, sma_20),
+            "price_vs_sma60": _ratio(last_price, sma_60),
+            "ema_12": ema_12,
+            "ema_26": ema_26,
+            "macd": macd_value,
+            "macd_signal": macd_signal,
+            "macd_hist": macd_hist,
+            "rsi_14": rsi_14,
+            "bb_width_20": bb_width_20,
+            "atr_14": atr_14,
             "session_liquidity_ok": bool((quote.volume or 0) > 0 or (latest_volume or 0) > 0),
             "feature_source": "yahoo_finance",
             "quote_fetched_at": quote.fetched_at.isoformat(),

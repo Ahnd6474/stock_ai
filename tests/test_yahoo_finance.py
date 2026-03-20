@@ -55,8 +55,10 @@ def test_ingest_session_bars_builds_predictor_features():
     )
     daily = FakeHistory(
         {
-            "Close": [90.0 + idx for idx in range(30)],
-            "Volume": [1_000_000 + idx * 10_000 for idx in range(30)],
+            "Close": [90.0 + idx for idx in range(90)],
+            "High": [91.0 + idx for idx in range(90)],
+            "Low": [89.0 + idx for idx in range(90)],
+            "Volume": [1_000_000 + idx * 10_000 for idx in range(90)],
         }
     )
     requested_symbols: list[str] = []
@@ -98,6 +100,16 @@ def test_ingest_session_bars_builds_predictor_features():
     assert features["trend_120m"] > 0
     assert features["extension_60m"] > 0
     assert features["volume_ratio_20d"] > 0
+    assert features["sma_20"] is not None
+    assert features["sma_60"] is not None
+    assert features["ema_12"] is not None
+    assert features["ema_26"] is not None
+    assert features["macd"] is not None
+    assert features["macd_signal"] is not None
+    assert features["macd_hist"] is not None
+    assert features["rsi_14"] is not None
+    assert features["bb_width_20"] is not None
+    assert features["atr_14"] is not None
 
 
 def test_ingest_quote_proxies_and_build_live_inputs_use_cached_quote():
