@@ -8,6 +8,8 @@ from .fdr_dataset import _require_pandas, add_technical_features
 from .yahoo_finance import YahooFinanceMarketData
 from .yahoo_finance import resolve_yahoo_symbol
 
+LABEL_COLUMNS = ["er_5b", "er_20b", "dd_20b", "p_up_20b"]
+
 
 def _require_yfinance():
     try:
@@ -706,7 +708,7 @@ def frame_to_intraday_training_rows(frame, symbol: str) -> list[dict]:
         "daily_volume_surge",
         "daily_volatility_20d",
     ]
-    label_columns = ["er_5b", "er_20b", "dd_20b", "p_up_20b"]
+    label_columns = LABEL_COLUMNS
 
     for _, row in normalized.iterrows():
         if any(pd.isna(row.get(col)) for col in base_columns + feature_columns + label_columns):
@@ -826,6 +828,19 @@ def save_intraday_training_rows(rows: Sequence[dict], output_path: str | Path) -
     return IntradayCollectionSummary(symbols=symbols, row_count=len(rows), output_path=str(path))
 
 
+def split_feature_and_label_rows(rows: Sequence[dict]) -> tuple[list[dict], list[dict]]:
+    feature_rows: list[dict] = []
+    label_rows: list[dict] = []
+    key_columns = ["datetime", "date", "symbol", "yahoo_symbol", "timeframe"]
+    for row in rows:
+        feature_row = {key: row.get(key) for key in row.keys() if key not in LABEL_COLUMNS}
+        label_row = {key: row.get(key) for key in key_columns if key in row}
+        label_row.update({col: row.get(col) for col in LABEL_COLUMNS})
+        feature_rows.append(feature_row)
+        label_rows.append(label_row)
+    return feature_rows, label_rows
+
+
 def save_multi_timeframe_training_rows(
     rows_by_timeframe: Mapping[str, Sequence[dict]],
     output_dir: str | Path,
@@ -835,6 +850,9 @@ def save_multi_timeframe_training_rows(
     summaries: dict[str, IntradayCollectionSummary] = {}
     for timeframe, rows in rows_by_timeframe.items():
         suffix = timeframe.replace("m", "min").replace("d", "day")
-        path = output_root / f"{prefix}_{suffix}.csv"
-        summaries[timeframe] = save_intraday_training_rows(rows, path)
+        feature_rows, label_rows = split_feature_and_label_rows(rows)
+        feature_path = output_root / f"{prefix}_{suffix}_features.csv"
+        label_path = output_root / f"{prefix}_{suffix}_labels.csv"
+        save_intraday_training_rows(label_rows, label_path)
+        summaries[timeframe] = save_intraday_training_rows(feature_rows, feature_path)
     return summaries

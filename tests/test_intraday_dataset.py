@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 
 from kswing_sentinel.intraday_dataset import (
+    LABEL_COLUMNS,
     add_daily_context_features,
     add_intraday_labels,
     add_intraday_market_features,
@@ -11,6 +12,7 @@ from kswing_sentinel.intraday_dataset import (
     add_session_features,
     _frame_to_training_rows,
     frame_to_intraday_training_rows,
+    split_feature_and_label_rows,
 )
 from kswing_sentinel.fdr_dataset import add_technical_features
 
@@ -145,3 +147,43 @@ def test_frame_rows_include_metadata_and_timeframe():
     assert row["company_name"] == "Samsung Electronics"
     assert row["sector"] == "Technology"
     assert row["market_cap"] == 100
+
+
+def test_split_feature_and_label_rows_removes_future_targets_from_features():
+    rows = [
+        {
+            "datetime": "2025-01-01T09:00:00+09:00",
+            "date": "2025-01-01",
+            "symbol": "005930",
+            "yahoo_symbol": "005930.KS",
+            "timeframe": "15m",
+            "current_price": 100.0,
+            "er_5b": 0.1,
+            "er_20b": 0.2,
+            "dd_20b": 0.05,
+            "p_up_20b": 1.0,
+        }
+    ]
+    feature_rows, label_rows = split_feature_and_label_rows(rows)
+    assert feature_rows
+    assert label_rows
+    for column in LABEL_COLUMNS:
+        assert column not in feature_rows[0]
+        assert column in label_rows[0]
+
+
+def test_session_features_use_only_seen_intraday_extremes():
+    source = _sample_intraday_frame().iloc[:8].copy()
+    source.iloc[0, source.columns.get_loc("High")] = 101.0
+    source.iloc[1, source.columns.get_loc("High")] = 102.0
+    source.iloc[2, source.columns.get_loc("High")] = 103.0
+    source.iloc[7, source.columns.get_loc("High")] = 120.0
+    source.iloc[0, source.columns.get_loc("Low")] = 99.0
+    source.iloc[1, source.columns.get_loc("Low")] = 98.0
+    source.iloc[2, source.columns.get_loc("Low")] = 97.0
+    source.iloc[7, source.columns.get_loc("Low")] = 80.0
+    frame = add_session_features(source)
+    third_bar = frame.iloc[2]
+    assert abs(third_bar["distance_from_day_high"] - ((third_bar["Close"] / 103.0) - 1.0)) < 1e-9
+    assert abs(third_bar["distance_from_day_low"] - ((third_bar["Close"] / 97.0) - 1.0)) < 1e-9
+    assert third_bar["opening_range_breakout_up"] == 0.0
