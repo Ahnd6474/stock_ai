@@ -13,10 +13,20 @@ class MarketRiskState:
     liquidity_deteriorated: bool = False
     venue_uncertain: bool = False
     predicted_drawdown: float = 0.0
+    uncertainty: float = 0.0
+    session_type: str = "CORE_DAY"
+    regime_flip: bool = False
+    event_decay: bool = False
+    hard_stop_triggered: bool = False
 
 
 class RiskEngine:
     def apply(self, decision: TradeDecision, state: MarketRiskState) -> TradeDecision:
+        if state.hard_stop_triggered:
+            decision.action = "SELL"
+            decision.target_weight = 0.0
+            decision.rationale_codes.append("HARD_STOP_EXIT")
+            return decision
         if state.market_risk_off and decision.action in {"BUY", "BUY_HALF"}:
             decision.action = "NO_TRADE"
             decision.target_weight = 0.0
@@ -36,4 +46,15 @@ class RiskEngine:
         if state.predicted_drawdown > 0.08 and decision.action in {"BUY", "BUY_HALF", "WAIT_PULLBACK"}:
             decision.target_weight *= 0.5
             decision.rationale_codes.append("PREDICTED_DD_SIZE_SHRINK")
+        if state.uncertainty > 0.7 and decision.action in {"BUY", "BUY_HALF", "WAIT_PULLBACK"}:
+            decision.target_weight *= 0.6
+            decision.rationale_codes.append("UNCERTAINTY_SIZE_SHRINK")
+        if state.session_type in {"NXT_PRE", "NXT_AFTER"} and decision.action in {"BUY", "BUY_HALF"}:
+            decision.target_weight *= 0.75
+            decision.rationale_codes.append("SESSION_AGGRESSIVENESS_THROTTLE")
+        if state.regime_flip or state.event_decay:
+            if decision.action in {"BUY", "BUY_HALF", "WAIT_PULLBACK"}:
+                decision.action = "REDUCE"
+                decision.target_weight *= 0.5
+                decision.rationale_codes.append("REGIME_EVENT_DECAY_REDUCE")
         return decision
