@@ -18,3 +18,7 @@ source .venv/bin/activate
 pip install -e .[dev]
 pytest -q
 ```
+
+## Roadmap
+
+- GitHub issue 초안: `docs/ROADMAP_GITHUB_ISSUES.md`
