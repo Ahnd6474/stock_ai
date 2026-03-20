@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import json
+from pathlib import Path
 
+from .calibration import ProbabilityCalibrator, QuantileAdjuster
 from .schemas import FusedPrediction
 
 
@@ -29,10 +32,17 @@ class NumericFirstPredictor:
         extension = float(features.get("extension_60m", 0.0))
         event_score = float(features.get("event_score", 0.0))
         uncertainty = min(1.0, max(0.0, 0.35 + 0.25 * abs(extension)))
-        er20 = 0.01 + 0.02 * flow_strength + 0.015 * trend_120m + 0.01 * event_score - 0.01 * max(extension, 0)
+        if self.model_blob.get("weights"):
+            weights = self.model_blob.get("weights", {})
+            bias = float(self.model_blob.get("bias", 0.0))
+            er20 = bias + sum(float(weights.get(k, 0.0)) * float(features.get(k, 0.0)) for k in weights)
+        else:
+            er20 = 0.01 + 0.02 * flow_strength + 0.015 * trend_120m + 0.01 * event_score - 0.01 * max(extension, 0)
         er5 = er20 * 0.45
         dd20 = max(0.01, 0.05 - 0.02 * trend_120m + 0.015 * max(extension, 0))
         pup = min(0.95, max(0.05, 0.5 + er20 * 2.0))
+        pup = self.p_up_calibrator.transform(pup)
+        dd20 = self.dd_adjuster.transform(dd20)
         flow_persist = min(1.0, max(0.0, 0.5 + flow_strength * 0.4))
         regime = "risk_off" if features.get("market_risk_off") else ("trend" if trend_120m > 0 else "chop")
         return FusedPrediction(

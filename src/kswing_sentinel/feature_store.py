@@ -17,6 +17,7 @@ class NumericFeatureRow:
 class FeatureStore:
     def __init__(self) -> None:
         self.rows: list[NumericFeatureRow] = []
+        self.market_context: dict[str, float] = {}
 
     def put(self, row: NumericFeatureRow) -> None:
         self.rows.append(row)

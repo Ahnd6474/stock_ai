@@ -18,6 +18,8 @@ class LiveInferenceService:
         self.vectorizer = VectorizationPipeline()
         self.predictor = NumericFirstPredictor()
         self.decider = DecisionEngine()
+        self._semantic_cache: dict[str, tuple[datetime, float]] = {}
+        self.anchor_schedule = ["08:10", "08:40", "09:35", "12:30", "15:10", "15:35", "15:45", "18:30", "19:40", "20:05"]
 
     def run_for_symbol(self, symbol: str, as_of_time: datetime, raw_event_payload: dict, features: dict,
                        venue_eligibility: str, broker_supports_nxt: bool = True, venue_freshness_ok: bool = True,
