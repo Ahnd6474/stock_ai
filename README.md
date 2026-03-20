@@ -1,23 +1,16 @@
 # K-Swing Sentinel v1.2 (MVP Scaffold)
 
-This repository now contains a working Python scaffold implementing the production design baseline:
 K-Swing Sentinel is a production-oriented Python scaffold for a KRX/NXT swing-trading workflow.  
 The codebase focuses on **strict contracts**, **predictable runtime behavior**, and **safe fallbacks** so teams can iterate on strategy logic without losing operational guardrails.
 
-- Typed contracts via Pydantic.
 This repository currently includes:
 
 - Typed contracts and schemas via Pydantic.
 - Session-aware KRX/NXT classification.
 - Venue-aware execution mapping with conservative rollover.
-- Numeric-first predictor stub + decision engine.
-- LLM normalizer with strict schema and degraded fallback.
 - Numeric-first predictor stub plus decision engine.
 - LLM normalizer with strict schema validation and degraded fallback behavior.
 - Flow snapshot store with provisional/confirmed leakage guard.
-- Basic orchestration and unit tests.
-- Service contracts for the production module boundaries.
-- Machine-validated example payloads for audit and integration tests.
 - Production runtime gate for readiness checks and startup validation.
 - Unit tests that cover contracts, runtime boundaries, routing, and fallback logic.
 
@@ -47,7 +40,6 @@ pip install -e .[dev]
 pytest -q
 ```
 
-For actual semantic stack wiring:
 ### 3) (Optional) Install semantic-stack extras
 
 If you plan to wire LLM and ML components locally:
