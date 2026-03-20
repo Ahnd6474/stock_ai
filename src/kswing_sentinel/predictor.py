@@ -124,4 +124,10 @@ class NumericFirstPredictor:
             uncertainty=uncertainty,
             regime_final=regime,
             event_score=event_score,
+            semantic_branch_enabled=bool(features.get("semantic_branch_enabled", True)),
+            text_branch_enabled=bool(features.get("text_branch_enabled", True)),
+            model_version=self.artifact.model_version,
+            calibrator_version="affine_v1",
+            missing_flags=features.get("missing_flags"),
+            stale_flags=features.get("stale_flags"),
         )

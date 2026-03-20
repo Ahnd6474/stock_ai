@@ -1,0 +1,7 @@
+requested_trading_mode = "KRX_NXT"
+allow_krx_only_fallback = true
+require_cross_venue_quotes_for_nxt = false
+required_env_vars = ["KRX_FEED_KEY", "BROKER_API_KEY", "BROKER_ACCOUNT_ID"]
+kill_switch_path = "runtime/kill_switch.flag"
+audit_log_path = "runtime/audit/live_audit.jsonl"
+metrics_log_path = "runtime/audit/live_metrics.jsonl"

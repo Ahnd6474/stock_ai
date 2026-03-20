@@ -9,6 +9,11 @@ class BrokerCapabilities:
     supports_nxt: bool
     supports_after_market: bool
     order_cutoff_minutes: int = 1
+    supports_live_trading: bool = True
+    supports_krx: bool = True
+    dry_run_only: bool = False
+    broker_name: str = "SIMULATED"
+    account_id: str = "SIM-ACCOUNT"
 
 
 @dataclass
@@ -20,6 +25,7 @@ class OrderRequest:
     limit_price: float | None
     submitted_at: datetime
     tif: str = "DAY"
+    session_type: str = "CORE_DAY"
 
 
 @dataclass
@@ -44,7 +50,13 @@ class BrokerGateway:
         oid = f"ORD-{self._counter:07d}"
         self._open_orders[oid] = order
         self._filled_qty[oid] = 0
+        if not self.capabilities.supports_live_trading or self.capabilities.dry_run_only:
+            return ExecutionReport(oid, 0, 0.0, "REJECTED", order.venue, order.submitted_at)
+        if order.venue == "KRX" and not self.capabilities.supports_krx:
+            return ExecutionReport(oid, 0, 0.0, "REJECTED", order.venue, order.submitted_at)
         if order.venue == "NXT" and not self.capabilities.supports_nxt:
+            return ExecutionReport(oid, 0, 0.0, "REJECTED", order.venue, order.submitted_at)
+        if order.session_type in {"NXT_AFTER", "CLOSE_PRICE"} and not self.capabilities.supports_after_market:
             return ExecutionReport(oid, 0, 0.0, "REJECTED", order.venue, order.submitted_at)
         if order.tif not in {"DAY", "IOC"}:
             return ExecutionReport(oid, 0, 0.0, "REJECTED", order.venue, order.submitted_at)

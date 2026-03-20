@@ -22,27 +22,34 @@ class MarketRiskState:
 
 class RiskEngine:
     def apply(self, decision: TradeDecision, state: MarketRiskState) -> TradeDecision:
+        if decision.vetoes_triggered is None:
+            decision.vetoes_triggered = []
         if state.hard_stop_triggered:
             decision.action = "SELL"
             decision.target_weight = 0.0
             decision.rationale_codes.append("HARD_STOP_EXIT")
+            decision.vetoes_triggered.append("HARD_STOP")
             return decision
         if state.market_risk_off and decision.action in {"BUY", "BUY_HALF"}:
             decision.action = "NO_TRADE"
             decision.target_weight = 0.0
             decision.rationale_codes.append("MARKET_RISK_OFF_VETO")
+            decision.vetoes_triggered.append("MARKET_RISK_OFF")
         if state.liquidity_deteriorated and decision.action in {"BUY", "BUY_HALF"}:
             decision.action = "WAIT_PULLBACK"
             decision.target_weight = min(decision.target_weight, 0.003)
             decision.rationale_codes.append("LIQUIDITY_DETERIORATION_VETO")
+            decision.vetoes_triggered.append("LIQUIDITY_DETERIORATION")
         if state.venue_uncertain and decision.action in {"BUY", "BUY_HALF"}:
             decision.action = "NO_TRADE"
             decision.target_weight = 0.0
             decision.rationale_codes.append("VENUE_UNCERTAINTY_VETO")
+            decision.vetoes_triggered.append("VENUE_UNCERTAINTY")
         if state.portfolio_beta > state.beta_cap and decision.action in {"BUY", "BUY_HALF"}:
             decision.action = "WAIT_PULLBACK"
             decision.target_weight = min(decision.target_weight, 0.005)
             decision.rationale_codes.append("BETA_CAP_THROTTLE")
+            decision.vetoes_triggered.append("BETA_CAP")
         if state.predicted_drawdown > 0.08 and decision.action in {"BUY", "BUY_HALF", "WAIT_PULLBACK"}:
             decision.target_weight *= 0.5
             decision.rationale_codes.append("PREDICTED_DD_SIZE_SHRINK")
