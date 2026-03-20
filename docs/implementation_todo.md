@@ -52,8 +52,8 @@
 - A1 `calendar.py`: 기본 휴장일 세트 + half-day 조기 종료 처리 + `is_tradable_minute()` 추가 (**IN_PROGRESS**)
 - A2 `session_rules.py`: 캘린더 tradable minute 기반 경계 배타화 및 확장 경계 테스트 추가 (**IN_PROGRESS**)
 - A3 `execution_mapper.py`: broker cutoff/신선도/유동성/브로커 미지원 별 rollover reason 세분화 (**IN_PROGRESS**)
-- A4 `label_builder.py`: entry/exit side별 비용 반영으로 ER/라벨 net 계산 정합성 개선 (**IN_PROGRESS**)
-- A5 `backtester.py`: same-bar(의사결정 시각 이하) 진입 금지 + partial-fill ratio 반영 (**IN_PROGRESS**)
+- A4 `label_builder.py`: entry/exit side별 비용 반영 + corporate action/halt censoring hook 추가 (**IN_PROGRESS**)
+- A5 `backtester.py`: same-bar 진입 금지 + partial-fill ratio + portfolio summary 경로 추가 (**IN_PROGRESS**)
 - B1 `cost_model.py`: liquidity bucket + 비선형 participation impact + `cost_model_version=v2` 반영 (**IN_PROGRESS**)
 - B2 `nxt_eligibility_store.py`: snapshot stale fail-closed resolve + broker routability 분리 저장 (**IN_PROGRESS**)
 - B3 `venue_router.py`: stale snapshot 차단/정책 기반 rationale 강화 (**IN_PROGRESS**)
@@ -64,6 +64,43 @@
 - C1-EXT `training.py`: multi-head artifact(`er_20d`,`dd_20d`,`p_up_20d`) 생성 경로 추가 (**IN_PROGRESS**)
 - C2-EXT `predictor.py`: multi-head artifact 추론 및 uncertainty 파라미터 적용 (**IN_PROGRESS**)
 - C3-EXT `calibration.py`: DD calibration(MAE) + uncertainty bucket 요약 리포트 추가 (**IN_PROGRESS**)
+- D1 `feature_store.py`: freshness/missingness/session flags + market context merge + online/offline parity 보강 (**DONE**)
+- D2 시장/거시 컨텍스트: KOSPI/KOSDAQ/futures/USDKRW/breadth 기반 regime context 병합 경로 추가 (**DONE**)
+- E1 `event_store.py`: cluster lineage + novelty score + canonical dedup/cluster 복원 경로 추가 (**DONE**)
+- F1 `orchestration.py`: retry/backoff + circuit breaker + dead-letter queue + semantic refresh mark 추가 (**IN_PROGRESS**)
+
+## 2026-03-20 구현 감사 상태
+
+- `pytest -q` 기준 전체 테스트: **61 passed**
+- 코드/테스트 기준 사실상 완료 또는 강하게 반영된 영역
+  - A1, A2, A3
+  - B1, B2, B3, B4
+  - C2, C3, C1-EXT, C2-EXT, C3-EXT
+  - D1, D2, D3, D4
+  - E1, E2, E3
+- 아직 todo 원문 기준으로 추가 구현이 필요한 영역
+  - A4: corporate action / halt / suspension censoring hook
+  - A5: portfolio mode 관점의 백테스트 확장
+  - C1: LightGBM baseline 및 artifact/metric 표준화
+  - F1: production runtime 경로까지 retry/backoff/DLQ 일관 적용
+
+## 이번 변경 증적
+
+- Test command: `python -m pytest tests/test_feature_store_context.py tests/test_event_store_lineage.py tests/test_orchestration_resilience.py -q`
+- Test result: `6 passed`
+- Regression command: `python -m pytest -q`
+- Regression result: `58 passed`
+- Rollback strategy:
+  - `src/kswing_sentinel/feature_store.py`
+  - `src/kswing_sentinel/event_store.py`
+  - `src/kswing_sentinel/orchestration.py`
+  - `src/kswing_sentinel/label_builder.py`
+  - `src/kswing_sentinel/backtester.py`
+  - `tests/test_feature_store_context.py`
+  - `tests/test_event_store_lineage.py`
+  - `tests/test_orchestration_resilience.py`
+  - `tests/test_label_builder_extensions.py`
+  - `tests/test_backtester_portfolio.py`
 
 ---
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
+from typing import Callable
 
 from .calendar import TradingCalendar
 from .cost_model import SessionCostModel
@@ -28,17 +29,41 @@ class LabelBundle:
     execution_timestamp: datetime
     entry_cost_bps: float
     exit_cost_bps: float
+    corporate_action_adjusted: bool = False
+    censored_reason: str | None = None
 
 
 class LabelBuilder:
-    def __init__(self, calendar: TradingCalendar, mapper: ExecutionMapper, costs: SessionCostModel) -> None:
+    def __init__(
+        self,
+        calendar: TradingCalendar,
+        mapper: ExecutionMapper,
+        costs: SessionCostModel,
+        corporate_action_adjuster: Callable[[str, list[PricePoint]], list[PricePoint]] | None = None,
+        halt_suspension_checker: Callable[[str, datetime, datetime], bool] | None = None,
+    ) -> None:
         self.calendar = calendar
         self.mapper = mapper
         self.costs = costs
+        self.corporate_action_adjuster = corporate_action_adjuster
+        self.halt_suspension_checker = halt_suspension_checker
 
     @staticmethod
     def _sorted_prices(prices: list[PricePoint]) -> list[PricePoint]:
         return sorted(prices, key=lambda p: p.timestamp)
+
+    def _prepared_prices(self, symbol: str, prices: list[PricePoint]) -> tuple[list[PricePoint], bool]:
+        ordered = self._sorted_prices(prices)
+        if self.corporate_action_adjuster is None:
+            return ordered, False
+        adjusted = self._sorted_prices(self.corporate_action_adjuster(symbol, ordered))
+        changed = [(p.timestamp, p.close) for p in adjusted] != [(p.timestamp, p.close) for p in ordered]
+        return adjusted, changed
+
+    def _is_censored(self, symbol: str, start: datetime, end: datetime) -> bool:
+        if self.halt_suspension_checker is None:
+            return False
+        return bool(self.halt_suspension_checker(symbol, start, end))
 
     def _entry_point(self, prices: list[PricePoint], exec_ts: datetime) -> PricePoint | None:
         return next((p for p in self._sorted_prices(prices) if p.timestamp >= exec_ts), None)
@@ -80,12 +105,15 @@ class LabelBuilder:
 
     def er_20d(self, symbol: str, decision_ts: datetime, prices: list[PricePoint], req: ExecutionRequest) -> float | None:
         plan = self.mapper.map_execution(req)
-        entry_point = self._entry_point(prices, plan.scheduled_exec_time)
+        prepared_prices, _ = self._prepared_prices(symbol, prices)
+        entry_point = self._entry_point(prepared_prices, plan.scheduled_exec_time)
         if entry_point is None:
             return None
         entry = entry_point.close
         d20 = self.calendar.add_trading_days(decision_ts.date(), 20)
-        exit_point = self._exit_point(prices, d20)
+        if self._is_censored(symbol, plan.scheduled_exec_time, prepared_prices[-1].timestamp):
+            return None
+        exit_point = self._exit_point(prepared_prices, d20)
         if exit_point is None:
             return None
         exit_session = classify_session(exit_point.timestamp, self.calendar)
@@ -103,16 +131,32 @@ class LabelBuilder:
 
     def build(self, symbol: str, decision_ts: datetime, prices: list[PricePoint], req: ExecutionRequest) -> LabelBundle:
         plan = self.mapper.map_execution(req)
-        sorted_prices = self._sorted_prices(prices)
+        sorted_prices, adjusted_for_corporate_actions = self._prepared_prices(symbol, prices)
         entry_point = self._entry_point(sorted_prices, plan.scheduled_exec_time)
         if entry_point is None:
-            return LabelBundle(None, None, None, None, True, plan.selected_venue, plan.selected_session_type, plan.scheduled_exec_time, 0.0, 0.0)
+            return LabelBundle(
+                None,
+                None,
+                None,
+                None,
+                True,
+                plan.selected_venue,
+                plan.selected_session_type,
+                plan.scheduled_exec_time,
+                0.0,
+                0.0,
+                corporate_action_adjusted=adjusted_for_corporate_actions,
+            )
 
         entry = entry_point.close
         d5 = self.calendar.add_trading_days(decision_ts.date(), 5)
         d20 = self.calendar.add_trading_days(decision_ts.date(), 20)
         exit_5d = self._exit_point(sorted_prices, d5)
         exit_20d = self._exit_point(sorted_prices, d20)
+        censored_reason = None
+        if self._is_censored(symbol, plan.scheduled_exec_time, sorted_prices[-1].timestamp):
+            exit_20d = None
+            censored_reason = "TRADING_HALT_OR_SUSPENSION"
 
         er5 = None
         exit_cost_bps = 0.0
@@ -166,4 +210,6 @@ class LabelBuilder:
             execution_timestamp=plan.scheduled_exec_time,
             entry_cost_bps=entry_cost_bps,
             exit_cost_bps=exit_cost_bps,
+            corporate_action_adjusted=adjusted_for_corporate_actions,
+            censored_reason=censored_reason,
         )
