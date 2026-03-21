@@ -6,15 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="1bb7c9f3-3fe9-4c50-b759-5b4f3369fa8f" name="변경" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/k_swing_sentinel.egg-info/SOURCES.txt" beforeDir="false" afterPath="$PROJECT_DIR$/src/k_swing_sentinel.egg-info/SOURCES.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/k_swing_sentinel.egg-info/dependency_links.txt" beforeDir="false" afterPath="$PROJECT_DIR$/src/k_swing_sentinel.egg-info/dependency_links.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/k_swing_sentinel.egg-info/requires.txt" beforeDir="false" afterPath="$PROJECT_DIR$/src/k_swing_sentinel.egg-info/requires.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/k_swing_sentinel.egg-info/top_level.txt" beforeDir="false" afterPath="$PROJECT_DIR$/src/k_swing_sentinel.egg-info/top_level.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/example_payloads.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/example_payloads.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/training.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/training.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/vectorization.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/vectorization.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_vectorization_metadata.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_vectorization_metadata.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
