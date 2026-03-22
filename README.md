@@ -5,7 +5,7 @@ The repository currently focuses on strict schemas, deterministic session handli
 
 ## Current Status
 
-Status checked on 2026-03-21: this repository is an executable scaffold, not just a planning document.
+Status checked on 2026-03-22: this repository is an executable scaffold, not just a planning document.
 
 - Test status: `python -m pytest -q` -> `70 passed`
 - Verified runtime: Python `3.12.10`
@@ -47,11 +47,48 @@ Status checked on 2026-03-21: this repository is an executable scaffold, not jus
 - Architecture and operating rules: `docs/k_swing_sentinel_v1_2.md`
 - Current issue-style roadmap: `docs/ROADMAP_GITHUB_ISSUES.md`
 - Working task list: `TODO.md`
+- Hierarchical encoder prototype: `enc/Model.py`
 - Core schemas: `src/kswing_sentinel/schemas.py`
 - Live/runtime gate: `src/kswing_sentinel/production_runtime.py`
 - Live inference path: `src/kswing_sentinel/live.py`
 - Backtester: `src/kswing_sentinel/backtester.py`
 - Training scaffold: `src/kswing_sentinel/training.py`
+
+## Current Live Flow
+
+The current live path is centered on `ProductionTradingEngine.run_live_anchor_batch()` and expects
+payloads, numeric features, venue eligibility, and last prices to be supplied by the caller.
+
+```mermaid
+flowchart TD
+    A[ProductionOrchestrator.run_anchor] --> B[ProductionTradingEngine.run_live_anchor_batch]
+    B --> C[ProductionReadinessGate.evaluate]
+    C -->|blocked| D[Raise LiveTradingBlockedError and emit monitoring snapshot]
+    C -->|ready| E[Loop symbols]
+    E --> F[LiveInferenceService.run_for_symbol]
+    F --> G[classify_session]
+    G --> H[LLMEventNormalizer.normalize]
+    H --> I[VectorizationPipeline.build]
+    I -->|success| J[text_branch_enabled=True]
+    I -->|failure| K[text_branch_enabled=False]
+    J --> L[NumericFirstPredictor.predict]
+    K --> L
+    L --> M[ExecutionMapper.map_execution]
+    M --> N[DecisionEngine.decide]
+    N --> O[_decision_to_order]
+    O -->|no trade or zero qty| P[Audit decision only]
+    O -->|order created| Q[BrokerGateway.submit]
+    Q --> R[Runtime audit event]
+    P --> S[Monitoring.emit_snapshot]
+    R --> S
+```
+
+### Flow Notes
+
+- `LLMEventNormalizer` and `VectorizationPipeline` already have degraded fallbacks, so the live path can continue in numeric-only mode.
+- The vectorizer currently validates the text branch and records metadata, but its output vectors are not yet fused into the predictor input used by `NumericFirstPredictor`.
+- `RiskEngine` and `PortfolioEngine` exist in the repository, but they are not yet inserted into the production order path between `DecisionEngine` and `BrokerGateway`.
+- `TemporalLikeOrchestrator` provides retry/circuit-breaker semantics, but it is still separate from the production orchestrator path shown above.
 
 ## Quick Start
 
@@ -60,7 +97,7 @@ Status checked on 2026-03-21: this repository is an executable scaffold, not jus
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .[dev]
+pip install -e .[dev,llm,ml,marketdata]
 ```
 
 Windows PowerShell:

@@ -1,36 +1,59 @@
-import torch
-import torch.nn as nn
-from transformers import AutoTokenizer, AutoModel
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+try:
+    import torch
+    import torch.nn as nn
+except Exception:  # pragma: no cover - optional dependency
+    torch = None
+    nn = None
+
+try:
+    from transformers import AutoModel, AutoTokenizer
+except Exception:  # pragma: no cover - optional dependency
+    AutoModel = None
+    AutoTokenizer = None
+
+from .utils import collate_documents
+
+DEFAULT_MODEL_ID = "klue/roberta-base"
 
 
-class SentenceLevelTransformer(nn.Module):
+class SentenceLevelTransformer(nn.Module if nn is not None else object):
+    """Hierarchical document encoder on top of a sentence-level RoBERTa backbone."""
+
     def __init__(
         self,
-        roberta_name="roberta-base",
-        num_classes=2,
-        sent_transformer_layers=2,
-        sent_transformer_heads=8,
-        sent_dropout=0.1,
-        max_sentences=128,
-        freeze_roberta=False,
-        pooling="cls",   # "cls" or "mean"
-    ):
+        *,
+        roberta_name: str = DEFAULT_MODEL_ID,
+        num_classes: int | None = None,
+        sent_transformer_layers: int = 2,
+        sent_transformer_heads: int = 8,
+        sent_dropout: float = 0.1,
+        max_sentences: int = 128,
+        freeze_roberta: bool = False,
+        pooling: str = "cls",
+    ) -> None:
+        if nn is None or torch is None:
+            raise RuntimeError("torch is required for SentenceLevelTransformer")
+        if AutoModel is None or AutoTokenizer is None:
+            raise RuntimeError("transformers is required for SentenceLevelTransformer")
         super().__init__()
+        if pooling not in {"cls", "mean"}:
+            raise ValueError("pooling must be 'cls' or 'mean'")
 
         self.tokenizer = AutoTokenizer.from_pretrained(roberta_name)
         self.roberta = AutoModel.from_pretrained(roberta_name)
-        self.hidden_size = self.roberta.config.hidden_size
+        self.hidden_size = int(self.roberta.config.hidden_size)
         self.pooling = pooling
         self.max_sentences = max_sentences
 
         if freeze_roberta:
-            for p in self.roberta.parameters():
-                p.requires_grad = False
+            for param in self.roberta.parameters():
+                param.requires_grad = False
 
-        # 문장 위치 임베딩
         self.sentence_pos_embedding = nn.Embedding(max_sentences, self.hidden_size)
-
-        # 문장 수준 Transformer
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=self.hidden_size,
             nhead=sent_transformer_heads,
@@ -42,76 +65,96 @@ class SentenceLevelTransformer(nn.Module):
         )
         self.sentence_transformer = nn.TransformerEncoder(
             encoder_layer,
-            num_layers=sent_transformer_layers
+            num_layers=sent_transformer_layers,
         )
-
         self.norm = nn.LayerNorm(self.hidden_size)
         self.dropout = nn.Dropout(sent_dropout)
+        self.classifier = nn.Linear(self.hidden_size, num_classes) if num_classes is not None else None
 
-        # 문서-level head
-        self.classifier = nn.Linear(self.hidden_size, num_classes)
+    @property
+    def device(self) -> torch.device:
+        return next(self.parameters()).device
 
-    def encode_sentences(self, input_ids, attention_mask):
+    def encode_sentences(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         """
-        input_ids:      [B, S, T]
-        attention_mask: [B, S, T]
-        B=batch, S=num_sentences, T=token_length
+        Args:
+            input_ids: [batch, num_sentences, num_tokens]
+            attention_mask: [batch, num_sentences, num_tokens]
+        Returns:
+            Sentence embeddings with shape [batch, num_sentences, hidden_size].
         """
-        B, S, T = input_ids.shape
-
-        # 문장별로 RoBERTa 적용 위해 flatten
-        flat_input_ids = input_ids.view(B * S, T)
-        flat_attention_mask = attention_mask.view(B * S, T)
+        batch_size, num_sentences, num_tokens = input_ids.shape
+        flat_input_ids = input_ids.view(batch_size * num_sentences, num_tokens)
+        flat_attention_mask = attention_mask.view(batch_size * num_sentences, num_tokens)
 
         outputs = self.roberta(
             input_ids=flat_input_ids,
-            attention_mask=flat_attention_mask
+            attention_mask=flat_attention_mask,
         )
-        last_hidden = outputs.last_hidden_state   # [B*S, T, H]
+        last_hidden = outputs.last_hidden_state
 
         if self.pooling == "cls":
-            # RoBERTa는 실질적으로 첫 토큰(<s>) 벡터 사용
-            sent_emb = last_hidden[:, 0, :]       # [B*S, H]
-        elif self.pooling == "mean":
-            mask = flat_attention_mask.unsqueeze(-1)  # [B*S, T, 1]
-            summed = (last_hidden * mask).sum(dim=1)
-            denom = mask.sum(dim=1).clamp(min=1)
-            sent_emb = summed / denom
+            sent_emb = last_hidden[:, 0, :]
         else:
-            raise ValueError("pooling must be 'cls' or 'mean'")
+            mask = flat_attention_mask.unsqueeze(-1).float()
+            summed = (last_hidden * mask).sum(dim=1)
+            denom = mask.sum(dim=1).clamp(min=1.0)
+            sent_emb = summed / denom
 
-        sent_emb = sent_emb.view(B, S, self.hidden_size)  # [B, S, H]
-        return sent_emb
+        return sent_emb.view(batch_size, num_sentences, self.hidden_size)
 
-    def forward(self, input_ids, attention_mask, sentence_mask):
+    def encode_documents(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        sentence_mask: torch.Tensor,
+    ) -> torch.Tensor:
         """
-        input_ids:      [B, S, T]
-        attention_mask: [B, S, T]
-        sentence_mask:  [B, S]   (1=real sentence, 0=padding sentence)
+        Args:
+            input_ids: [batch, num_sentences, num_tokens]
+            attention_mask: [batch, num_sentences, num_tokens]
+            sentence_mask: [batch, num_sentences]
+        Returns:
+            Document embeddings with shape [batch, hidden_size].
         """
-        B, S, T = input_ids.shape
-
-        sent_emb = self.encode_sentences(input_ids, attention_mask)  # [B, S, H]
-
-        # 문장 위치 정보 추가
-        positions = torch.arange(S, device=input_ids.device).unsqueeze(0).expand(B, S)
+        _, num_sentences, _ = input_ids.shape
+        sent_emb = self.encode_sentences(input_ids, attention_mask)
+        positions = torch.arange(num_sentences, device=input_ids.device).unsqueeze(0)
+        positions = positions.expand(input_ids.size(0), num_sentences)
         sent_emb = sent_emb + self.sentence_pos_embedding(positions)
+        sent_emb = self.dropout(self.norm(sent_emb))
 
-        sent_emb = self.norm(sent_emb)
-        sent_emb = self.dropout(sent_emb)
+        padding_mask = sentence_mask == 0
+        sent_out = self.sentence_transformer(sent_emb, src_key_padding_mask=padding_mask)
+        mask = sentence_mask.unsqueeze(-1).float()
+        return (sent_out * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1.0)
 
-        # TransformerEncoder의 src_key_padding_mask는 True가 padding
-        padding_mask = (sentence_mask == 0)  # [B, S]
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        sentence_mask: torch.Tensor,
+        *,
+        return_embeddings: bool = False,
+    ) -> torch.Tensor:
+        doc_emb = self.encode_documents(input_ids, attention_mask, sentence_mask)
+        if return_embeddings or self.classifier is None:
+            return doc_emb
+        return self.classifier(self.dropout(doc_emb))
 
-        sent_out = self.sentence_transformer(
-            sent_emb,
-            src_key_padding_mask=padding_mask
-        )  # [B, S, H]
-
-        # 문서 표현: 유효 문장 평균
-        mask = sentence_mask.unsqueeze(-1)  # [B, S, 1]
-        doc_emb = (sent_out * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
-
-        logits = self.classifier(self.dropout(doc_emb))
-        return logits
-
+    def forward_texts(
+        self,
+        documents: Sequence[str] | Sequence[Sequence[str]],
+        *,
+        max_sentences: int | None = None,
+        max_tokens: int = 64,
+        return_embeddings: bool = True,
+    ) -> torch.Tensor:
+        batch = collate_documents(
+            documents,
+            self.tokenizer,
+            max_sentences=max_sentences or self.max_sentences,
+            max_tokens=max_tokens,
+        )
+        batch = {key: value.to(self.device) for key, value in batch.items()}
+        return self.forward(**batch, return_embeddings=return_embeddings)
