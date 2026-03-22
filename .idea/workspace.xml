@@ -4,11 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="1bb7c9f3-3fe9-4c50-b759-5b4f3369fa8f" name="변경" comment="">
-      <change beforePath="$PROJECT_DIR$/.aiassistant/rules/agent.md" beforeDir="false" afterPath="$PROJECT_DIR$/.aiassistant/rules/agent.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/enc/dod.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/enc/exp1.ipynb" beforeDir="false" />
-    </list>
+    <list default="true" id="1bb7c9f3-3fe9-4c50-b759-5b4f3369fa8f" name="변경" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -95,7 +91,7 @@
       <workItem from="1773980517589" duration="14088000" />
       <workItem from="1774020178800" duration="1508000" />
       <workItem from="1774171499662" duration="4811000" />
-      <workItem from="1774177859822" duration="350000" />
+      <workItem from="1774177859822" duration="673000" />
     </task>
     <servers />
   </component>
