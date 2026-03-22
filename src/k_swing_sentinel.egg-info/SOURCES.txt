@@ -68,6 +68,7 @@ tests/test_schema_validation.py
 tests/test_session_boundaries_extended.py
 tests/test_session_mapping.py
 tests/test_timestamp_boundaries.py
+tests/test_trainable_text_regressor.py
 tests/test_training_multihead_predictor.py
 tests/test_training_pipeline_artifacts.py
 tests/test_training_splitter.py

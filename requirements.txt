@@ -1,0 +1,3 @@
+# Full local environment for development, tests, LLM integration, ML, and market-data helpers.
+# Keep dependency versions in pyproject.toml as the single source of truth.
+-e .[dev,llm,ml,marketdata]
