@@ -4,13 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="1bb7c9f3-3fe9-4c50-b759-5b4f3369fa8f" name="변경" comment="">
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/enc/Model.py" beforeDir="false" afterPath="$PROJECT_DIR$/enc/Model.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/enc/example.py" beforeDir="false" afterPath="$PROJECT_DIR$/enc/example.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/enc/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/enc/utils.py" afterDir="false" />
-    </list>
+    <list default="true" id="1bb7c9f3-3fe9-4c50-b759-5b4f3369fa8f" name="변경" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -97,7 +91,7 @@
       <workItem from="1773980517589" duration="14088000" />
       <workItem from="1774020178800" duration="1508000" />
       <workItem from="1774171499662" duration="4811000" />
-      <workItem from="1774177859822" duration="1073000" />
+      <workItem from="1774177859822" duration="1328000" />
     </task>
     <servers />
   </component>
