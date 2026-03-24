@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="1080" viewBox="0 0 1680 1080" role="img" aria-labelledby="title desc">
+  <title id="title">K-Swing Sentinel Architecture Block Diagram</title>
+  <desc id="desc">Block diagram showing offline data collection and training feeding model artifacts, and live runtime consuming caller inputs, vectorization, prediction, execution, audit, and monitoring.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f6f1e8"/>
+      <stop offset="100%" stop-color="#edf5f2"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f9fbfb"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M0,0 L14,7 L0,14 z" fill="#294640"/>
+    </marker>
+    <marker id="arrowSoft" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M0,0 L14,7 L0,14 z" fill="#6b7280"/>
+    </marker>
+    <style>
+      .title { font: 700 34px Georgia, "Times New Roman", serif; fill: #19342e; }
+      .subtitle { font: 400 16px "Trebuchet MS", Verdana, sans-serif; fill: #46615a; }
+      .section { font: 700 20px "Trebuchet MS", Verdana, sans-serif; fill: #1f4038; }
+      .box-title { font: 700 18px "Trebuchet MS", Verdana, sans-serif; fill: #122a24; }
+      .box-body { font: 400 14px "Trebuchet MS", Verdana, sans-serif; fill: #35504a; }
+      .small { font: 400 13px "Trebuchet MS", Verdana, sans-serif; fill: #5d6e6a; }
+      .panel { fill: url(#panel); stroke: #d5dfdc; stroke-width: 2; rx: 26; }
+      .shared { fill: #f4efe4; stroke: #cbb892; stroke-width: 2.5; rx: 24; }
+      .source { fill: #fff8e7; stroke: #ddc27d; stroke-width: 2.5; rx: 22; }
+      .offline { fill: #eef7f3; stroke: #7caf97; stroke-width: 2.5; rx: 22; }
+      .runtime { fill: #eef2fb; stroke: #8ea7d4; stroke-width: 2.5; rx: 22; }
+      .guardrail { fill: #fdf0e8; stroke: #d59d7d; stroke-width: 2.5; rx: 22; }
+      .note { fill: #f6f7f8; stroke: #cfd6db; stroke-width: 2; rx: 18; }
+      .edge { stroke: #294640; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .edge-soft { stroke: #6b7280; stroke-width: 2.5; fill: none; marker-end: url(#arrowSoft); }
+      .edge-dash { stroke: #6b7280; stroke-width: 2.5; fill: none; stroke-dasharray: 9 7; marker-end: url(#arrowSoft); }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1680" height="1080" fill="url(#bg)"/>
+
+  <text x="70" y="70" class="title">K-Swing Sentinel Architecture</text>
+  <text x="70" y="100" class="subtitle">Offline data and training produce artifacts consumed by a guarded live runtime. Some live inputs still come from the caller or external integrations.</text>
+
+  <rect x="50" y="140" width="500" height="860" class="panel"/>
+  <rect x="590" y="140" width="500" height="860" class="panel"/>
+  <rect x="1130" y="140" width="500" height="860" class="panel"/>
+
+  <text x="80" y="180" class="section">1. Offline Data And Training</text>
+  <text x="620" y="180" class="section">2. Shared Assets</text>
+  <text x="1160" y="180" class="section">3. Live Runtime And Execution</text>
+
+  <rect x="85" y="220" width="430" height="120" class="source"/>
+  <text x="110" y="255" class="box-title">Market Data Sources</text>
+  <text x="110" y="282" class="box-body">FinanceDataReader, Yahoo, sample CSV files under</text>
+  <text x="110" y="304" class="box-body">data/training/, and future external feed integrations</text>
+
+  <rect x="85" y="375" width="430" height="135" class="offline"/>
+  <text x="110" y="410" class="box-title">Collection And Feature Scripts</text>
+  <text x="110" y="437" class="box-body">scripts/collect_fdr_training_data.py</text>
+  <text x="110" y="459" class="box-body">scripts/collect_intraday_training_data.py</text>
+  <text x="110" y="481" class="box-body">fdr_dataset.py and intraday_dataset.py build rows and labels</text>
+
+  <rect x="85" y="545" width="430" height="170" class="offline"/>
+  <text x="110" y="580" class="box-title">TrainingPipeline</text>
+  <text x="110" y="607" class="box-body">Walk-forward linear baseline and multi-head training</text>
+  <text x="110" y="629" class="box-body">TemporalStateAttentionModel training and metrics export</text>
+  <text x="110" y="651" class="box-body">Optional RoBERTa text regressor fine-tuning</text>
+  <text x="110" y="673" class="box-body">src/kswing_sentinel/training.py</text>
+
+  <rect x="85" y="750" width="430" height="125" class="note"/>
+  <text x="110" y="785" class="box-title">Offline Outputs</text>
+  <text x="110" y="812" class="box-body">artifact.json, weights.pt, fold metrics, sample datasets,</text>
+  <text x="110" y="834" class="box-body">and schema-compatible predictor artifacts</text>
+
+  <rect x="625" y="220" width="430" height="120" class="shared"/>
+  <text x="650" y="255" class="box-title">Configurations</text>
+  <text x="650" y="282" class="box-body">configs/production_runtime.example.toml</text>
+  <text x="650" y="304" class="box-body">configs/semantic_stack.example.toml and environment variables</text>
+
+  <rect x="625" y="375" width="430" height="140" class="shared"/>
+  <text x="650" y="410" class="box-title">Model Artifacts And Metadata</text>
+  <text x="650" y="437" class="box-body">numeric feature keys, vector dims, sequence key,</text>
+  <text x="650" y="459" class="box-body">temporal weights path, calibrator version, model version</text>
+  <text x="650" y="481" class="box-body">loaded by NumericFirstPredictor at runtime</text>
+
+  <rect x="625" y="550" width="430" height="145" class="shared"/>
+  <text x="650" y="585" class="box-title">Core Package Surface</text>
+  <text x="650" y="612" class="box-body">src/kswing_sentinel/ contains the reusable modules</text>
+  <text x="650" y="634" class="box-body">for vectorization, prediction, execution, audit, and tests</text>
+  <text x="650" y="656" class="box-body">README and docs describe scope, constraints, and roadmap</text>
+
+  <rect x="625" y="730" width="430" height="145" class="note"/>
+  <text x="650" y="765" class="box-title">Important Boundary</text>
+  <text x="650" y="792" class="box-body">The repository supplies the runtime scaffold and model path,</text>
+  <text x="650" y="814" class="box-body">but live market data, broker credentials, feature persistence,</text>
+  <text x="650" y="836" class="box-body">and historical state-sequence assembly are still external.</text>
+
+  <rect x="1165" y="220" width="430" height="140" class="source"/>
+  <text x="1190" y="255" class="box-title">Caller-Supplied Live Inputs</text>
+  <text x="1190" y="282" class="box-body">raw payloads, numeric features or state_sequence,</text>
+  <text x="1190" y="304" class="box-body">venue eligibility, last prices, dependency state,</text>
+  <text x="1190" y="326" class="box-body">runtime config, and model requirements</text>
+
+  <rect x="1165" y="395" width="430" height="145" class="runtime"/>
+  <text x="1190" y="430" class="box-title">Production Runtime Entry</text>
+  <text x="1190" y="457" class="box-body">ProductionOrchestrator and ProductionTradingEngine</text>
+  <text x="1190" y="479" class="box-body">run readiness checks, idempotency, degraded fallback,</text>
+  <text x="1190" y="501" class="box-body">kill-switch handling, and runtime audit events</text>
+
+  <rect x="1165" y="575" width="430" height="155" class="runtime"/>
+  <text x="1190" y="610" class="box-title">LiveInferenceService</text>
+  <text x="1190" y="637" class="box-body">payload text extraction, direct VectorizationPipeline path,</text>
+  <text x="1190" y="659" class="box-body">latest vector injection into state_sequence,</text>
+  <text x="1190" y="681" class="box-body">and session-aware predictor invocation</text>
+
+  <rect x="1165" y="765" width="430" height="145" class="runtime"/>
+  <text x="1190" y="800" class="box-title">Predictor And Decision Layer</text>
+  <text x="1190" y="827" class="box-body">NumericFirstPredictor loads temporal artifacts, builds</text>
+  <text x="1190" y="849" class="box-body">state matrices, runs TemporalStateAttentionModel, then</text>
+  <text x="1190" y="871" class="box-body">DecisionEngine and ExecutionMapper select action and venue</text>
+
+  <rect x="1165" y="945" width="430" height="85" class="guardrail"/>
+  <text x="1190" y="980" class="box-title">Broker, Audit, And Monitoring</text>
+  <text x="1190" y="1002" class="box-body">BrokerGateway, AuditLogStore, Monitoring</text>
+
+  <rect x="1330" y="120" width="250" height="70" class="note"/>
+  <text x="1352" y="150" class="small">Optional: LLMEventNormalizer exists</text>
+  <text x="1352" y="170" class="small">for offline or experimental paths</text>
+
+  <path d="M300 340 L300 375" class="edge"/>
+  <path d="M300 510 L300 545" class="edge"/>
+  <path d="M300 715 L300 750" class="edge-soft"/>
+
+  <path d="M515 442 C560 442, 575 442, 625 442" class="edge"/>
+  <path d="M1055 442 C1100 442, 1115 442, 1165 442" class="edge"/>
+
+  <path d="M1055 290 C1110 290, 1110 290, 1165 290" class="edge-soft"/>
+  <path d="M840 515 L840 550" class="edge-soft"/>
+
+  <path d="M1380 360 L1380 395" class="edge"/>
+  <path d="M1380 540 L1380 575" class="edge"/>
+  <path d="M1380 730 L1380 765" class="edge"/>
+  <path d="M1380 910 L1380 945" class="edge"/>
+
+  <path d="M1055 445 C1125 445, 1125 835, 1165 835" class="edge"/>
+  <path d="M1055 790 C1125 790, 1125 625, 1165 625" class="edge-dash"/>
+  <text x="1075" y="778" class="small">external today</text>
+
+  <path d="M1420 190 L1420 395" class="edge-dash"/>
+
+  <rect x="70" y="1015" width="1540" height="35" class="note"/>
+  <text x="94" y="1038" class="small">Primary runtime path: caller inputs -> readiness gate -> LiveInferenceService -> vectorization and temporal prediction -> decision and venue mapping -> broker submission, audit, and metrics.</text>
+</svg>
