@@ -4,6 +4,8 @@ K-Swing Sentinel is a production-oriented Python scaffold for a KRX/NXT swing-tr
 The codebase is strongest in typed contracts, session and venue handling, readiness gates, safe fallbacks, and testable runtime behavior.
 It is not yet a turnkey live-trading system with bundled market data and broker connectivity.
 
+![K-Swing Sentinel Architecture Flow](docs/architecture_flow.svg)
+
 ## At a Glance
 
 - Good fit if you want to extend a trading-system scaffold with strict schemas, deterministic execution rules, and safety guardrails.

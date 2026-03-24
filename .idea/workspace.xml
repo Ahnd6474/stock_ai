@@ -5,18 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="1bb7c9f3-3fe9-4c50-b759-5b4f3369fa8f" name="변경" comment="">
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/attention_aggregator.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/attention_aggregator.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/contracts.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/contracts.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/example_payloads.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/example_payloads.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/live.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/live.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/predictor.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/predictor.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/production_runtime.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/production_runtime.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/training.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/training.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kswing_sentinel/vectorization.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/kswing_sentinel/vectorization.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_production_runtime.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_production_runtime.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_vectorization_metadata.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_vectorization_metadata.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -105,7 +94,7 @@
       <workItem from="1774020178800" duration="1508000" />
       <workItem from="1774171499662" duration="4811000" />
       <workItem from="1774177859822" duration="1328000" />
-      <workItem from="1774337255300" duration="6289000" />
+      <workItem from="1774337255300" duration="6587000" />
     </task>
     <servers />
   </component>
