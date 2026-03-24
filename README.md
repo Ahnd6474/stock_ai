@@ -1,103 +1,59 @@
 # K-Swing Sentinel v0.1.0
 
 K-Swing Sentinel is a production-oriented Python scaffold for a KRX/NXT swing-trading workflow.
-The repository currently focuses on strict schemas, deterministic session handling, safe fallbacks, and testable runtime behavior.
+The codebase is strongest in typed contracts, session and venue handling, readiness gates, safe fallbacks, and testable runtime behavior.
+It is not yet a turnkey live-trading system with bundled market data and broker connectivity.
 
-## Current Status
+## At a Glance
 
-Status checked on 2026-03-22: this repository is an executable scaffold, not just a planning document.
+- Good fit if you want to extend a trading-system scaffold with strict schemas, deterministic execution rules, and safety guardrails.
+- Less complete if you need a finished live stack, production broker integration, or a full portfolio simulator out of the box.
+- Most modules are library-style building blocks. The main developer workflows today are tests, training helpers, data-collection scripts, and runtime integration work.
 
-- Test status: `python -m pytest -q` -> `70 passed`
-- Verified runtime: Python `3.12.10`
-- Repository state: core domain logic and guardrails are implemented, while live market/broker connectivity is still partial
+## What Is Already Implemented
 
-## What Is Implemented
+- Pydantic-based contracts and schema validation across the runtime surface
+- KRX/NXT session classification, venue-aware routing rules, and conservative execution mapping
+- Decision logic, risk-aware trade action selection, and degraded fallback handling
+- Cost-aware backtesting utilities with no-lookahead validation
+- Walk-forward training scaffolding with artifact export
+- Numeric-first predictor loading local JSON artifacts
+- LLM event normalization with structured-output validation and numeric-only fallback
+- Text vectorization with a transformer-backed path and a hashing fallback
+- Audit logging, monitoring hooks, orchestration helpers, and production readiness checks
+- Data-collection scripts and sample training datasets under `data/training/`
 
-- Pydantic-based typed contracts and schema validation
-- KRX/NXT session classification and venue-aware execution mapping
-- Decision engine, risk-oriented trade action selection, and conservative fallbacks
-- Cost-aware backtester with no-lookahead validation
-- Walk-forward training scaffold with artifact export
-- Numeric-first predictor that can load local JSON model artifacts
-- LLM event normalizer with strict structured-output validation and degraded fallback
-- RoBERTa-based text vectorization pipeline with hierarchical aggregation, local model download support, and hashing fallback
-- Trainable RoBERTa text-regression path so the backbone can be fine-tuned instead of using fixed embeddings
-- Production readiness gate, runtime audit logging, monitoring, and orchestration helpers
-- Data collection scripts for FinanceDataReader and Yahoo-based training samples
-- Example runtime/config files and sample training datasets under `data/training/`
+## What Is Still Partial
 
-## Partially Implemented
+- Live inference exists, but external payloads, numeric features, venue eligibility, last prices, and dependency state still have to be supplied by the caller
+- LLM integration supports OpenRouter-style providers, but credentials and provider operations are outside the repository
+- The text branch is validated and tracked, but its vectors are not yet fused into the default numeric predictor path
+- The predictor and training pipeline are baseline scaffolds, not a production-grade LightGBM or CatBoost stack
+- The backtester enforces execution realism better than a toy simulator, but it is not yet a full event-driven portfolio engine
 
-- Live inference flow exists, but real production deployment still depends on external market data, broker APIs, and environment configuration
-- LLM integration supports OpenRouter-compatible providers, but API keys are not stored in the repository
-- RoBERTa mean-pooling activates when `transformers` and `torch` are installed; otherwise the encoder falls back to hashing-based embeddings
-- The new text fine-tuning path is minimal and task-specific; it is not yet wired into the numeric predictor or live runtime by default
-- Predictor/training pipeline is a lightweight baseline scaffold, not yet a production-grade LightGBM/CatBoost stack
-- Backtesting supports execution parity and session-aware cost handling, but is not yet a full event-driven portfolio simulator
+## What Is Not Included Yet
 
-## Not Yet Production-Ready
-
-- Licensed real-time KRX/NXT feeds are not bundled with this repository
-- Broker order routing is represented by gateway abstractions and tests, not by a confirmed live brokerage integration
-- Intraday provisional flow archive and venue microstructure coverage are not guaranteed from the checked-in data alone
-- Operational runbooks, deployment automation, and full live shadow-trading procedures are still incomplete
-
-## Key Files
-
-- Architecture and operating rules: `docs/k_swing_sentinel_v1_2.md`
-- Current issue-style roadmap: `docs/ROADMAP_GITHUB_ISSUES.md`
-- Working task list: `TODO.md`
-- Hierarchical encoder prototype: `enc/Model.py`
-- Core schemas: `src/kswing_sentinel/schemas.py`
-- Live/runtime gate: `src/kswing_sentinel/production_runtime.py`
-- Live inference path: `src/kswing_sentinel/live.py`
-- Backtester: `src/kswing_sentinel/backtester.py`
-- Training scaffold: `src/kswing_sentinel/training.py`
-
-## Current Live Flow
-
-The current live path is centered on `ProductionTradingEngine.run_live_anchor_batch()` and expects
-payloads, numeric features, venue eligibility, and last prices to be supplied by the caller.
-
-```mermaid
-flowchart TD
-    A[ProductionOrchestrator.run_anchor] --> B[ProductionTradingEngine.run_live_anchor_batch]
-    B --> C[ProductionReadinessGate.evaluate]
-    C -->|blocked| D[Raise LiveTradingBlockedError and emit monitoring snapshot]
-    C -->|ready| E[Loop symbols]
-    E --> F[LiveInferenceService.run_for_symbol]
-    F --> G[classify_session]
-    G --> H[LLMEventNormalizer.normalize]
-    H --> I[VectorizationPipeline.build]
-    I -->|success| J[text_branch_enabled=True]
-    I -->|failure| K[text_branch_enabled=False]
-    J --> L[NumericFirstPredictor.predict]
-    K --> L
-    L --> M[ExecutionMapper.map_execution]
-    M --> N[DecisionEngine.decide]
-    N --> O[_decision_to_order]
-    O -->|no trade or zero qty| P[Audit decision only]
-    O -->|order created| Q[BrokerGateway.submit]
-    Q --> R[Runtime audit event]
-    P --> S[Monitoring.emit_snapshot]
-    R --> S
-```
-
-### Flow Notes
-
-- `LLMEventNormalizer` and `VectorizationPipeline` already have degraded fallbacks, so the live path can continue in numeric-only mode.
-- The vectorizer currently validates the text branch and records metadata, but its output vectors are not yet fused into the predictor input used by `NumericFirstPredictor`.
-- `RiskEngine` and `PortfolioEngine` exist in the repository, but they are not yet inserted into the production order path between `DecisionEngine` and `BrokerGateway`.
-- `TemporalLikeOrchestrator` provides retry/circuit-breaker semantics, but it is still separate from the production orchestrator path shown above.
+- Licensed real-time KRX or NXT feeds
+- Confirmed live brokerage integration
+- Deployment automation, shadow-trading runbooks, and operational procedures
+- Full portfolio-level execution, reconciliation, and post-trade lifecycle coverage
 
 ## Quick Start
 
-### 1. Create an environment
+### Prerequisites
+
+- Python `>=3.11`
+- Optional for LLM smoke tests: `OPENROUTER_API_KEY`
+- Optional for live-runtime experiments: `KRX_FEED_KEY`, `BROKER_API_KEY`, and `BROKER_ACCOUNT_ID`
+
+### Full local environment
+
+Bash:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .[dev,llm,ml,marketdata]
+pip install -r requirements.txt
 ```
 
 Windows PowerShell:
@@ -105,29 +61,35 @@ Windows PowerShell:
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -e .[dev]
+pip install -r requirements.txt
 ```
 
-### 2. Run tests
+`requirements.txt` installs the editable package with `dev`, `llm`, `ml`, and `marketdata` extras.
+
+### Minimal development environment
+
+If you only want the test and core runtime surface:
+
+```bash
+pip install -e '.[dev]'
+```
+
+PowerShell:
+
+```powershell
+pip install -e ".[dev]"
+```
+
+### Run tests
 
 ```bash
 python -m pytest -q
 ```
 
-### 3. Optional extras
-
-If you want local LLM or ML dependencies:
+On restricted environments, you may need to point pytest at a writable temp directory:
 
 ```bash
-pip install -e .[dev,llm,ml]
-```
-
-That enables the `transformers`/`torch` path used by the default Korean RoBERTa encoder (`klue/roberta-base`).
-
-If you want market-data collection helpers:
-
-```bash
-pip install -e .[dev,marketdata]
+python -m pytest -q --basetemp .tmp/pytest -p no:cacheprovider
 ```
 
 ## Common Commands
@@ -140,33 +102,87 @@ python -m pytest -q tests/test_venue_router.py
 python -m pytest -q tests/test_training_pipeline_artifacts.py
 ```
 
-Collect small sample datasets:
+Collect a small FinanceDataReader dataset:
 
 ```bash
-python scripts/collect_fdr_training_data.py --symbols 005930 000660
-python scripts/collect_intraday_training_data.py --symbols 005930 000660
+python scripts/collect_fdr_training_data.py --symbols 005930 000660 035420
 ```
+
+Collect multi-timeframe Yahoo-based sample datasets:
+
+```bash
+python scripts/collect_intraday_training_data.py --symbols 005930 000660 --prefix krx_sample
+```
+
+Smoke-test the LLM normalizer path:
+
+```bash
+python scripts/smoke_test_grok.py
+```
+
+## Runtime Entry Points
+
+There is no polished end-user CLI yet. The main integration points are Python classes:
+
+- [`src/kswing_sentinel/production_runtime.py`](src/kswing_sentinel/production_runtime.py)
+  - `ProductionRuntimeConfig`
+  - `ProductionReadinessGate`
+  - `ProductionTradingEngine`
+  - `ProductionOrchestrator`
+- [`src/kswing_sentinel/live.py`](src/kswing_sentinel/live.py)
+  - `LiveInferenceService`
+
+The current live path expects the caller to provide:
+
+- symbols
+- raw event payloads
+- numeric features
+- venue eligibility flags
+- last prices
+- runtime dependency state
+- runtime config
+- model requirements
+
+That design keeps the core logic testable, but it also means this repository does not yet include the surrounding production services needed for live deployment.
+
+## Configuration and Data
+
+- [`configs/production_runtime.example.toml`](configs/production_runtime.example.toml)
+  - Trading mode selection
+  - Required environment variables
+  - Kill switch path
+  - Audit and metrics log paths
+- [`configs/semantic_stack.example.toml`](configs/semantic_stack.example.toml)
+  - Search provider settings
+  - LLM provider and model settings
+  - Encoder backend and model settings
+- [`data/training/`](data/training/)
+  - Sample daily, 60-minute, and 15-minute feature datasets
 
 ## Repository Layout
 
 ```text
 configs/                  Example runtime and semantic-stack configuration
 data/training/            Sample training datasets
-docs/                     Architecture notes and roadmap
+docs/                     Architecture notes and roadmap documents
+enc/                      Experimental encoder prototype
 scripts/                  Data collection and smoke-test helpers
 src/kswing_sentinel/      Core implementation
-tests/                    Unit tests for runtime behavior and guardrails
+tests/                    Unit tests for contracts, runtime behavior, and guardrails
+TODO.md                   Working implementation checklist
 ```
 
-## Next Priorities
+## Key Documents
 
-- Replace remaining baseline components with stronger production-grade model artifacts
-- Harden live broker/runtime integration around real dependency checks
-- Expand portfolio simulation and execution realism
-- Clarify README/TODO/docs so implemented vs planned scope stays aligned
+- Architecture and operating rules: [`docs/k_swing_sentinel_v1_2.md`](docs/k_swing_sentinel_v1_2.md)
+- Approach and differentiators: [`docs/approach_differentiators.md`](docs/approach_differentiators.md)
+- Roadmap draft: [`docs/ROADMAP_GITHUB_ISSUES.md`](docs/ROADMAP_GITHUB_ISSUES.md)
+- Detailed implementation notes: [`docs/implementation_todo.md`](docs/implementation_todo.md)
+- Current task checklist: [`TODO.md`](TODO.md)
 
-## Roadmap References
+## Current Priorities
 
-- Architecture: `docs/k_swing_sentinel_v1_2.md`
-- GitHub issue draft roadmap: `docs/ROADMAP_GITHUB_ISSUES.md`
-- Detailed implementation notes: `docs/implementation_todo.md`
+- Replace remaining scaffold-level predictor pieces with stronger trained artifacts
+- Connect live runtime inputs to real feature, event, and venue-eligibility sources
+- Expand execution realism and portfolio simulation
+- Keep README, TODOs, and architecture documents aligned with actual implementation status
