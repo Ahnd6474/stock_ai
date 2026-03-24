@@ -4,7 +4,9 @@ K-Swing Sentinel is a production-oriented Python scaffold for a KRX/NXT swing-tr
 The codebase is strongest in typed contracts, session and venue handling, readiness gates, safe fallbacks, and testable runtime behavior.
 It is not yet a turnkey live-trading system with bundled market data and broker connectivity.
 
-![K-Swing Sentinel Architecture Flow](docs/architecture_flow.svg)
+![K-Swing Sentinel Architecture](docs/architecture_block_diagram.svg)
+
+The diagram above shows the current repository boundary: offline data collection and training on the left, shared artifacts and configuration in the middle, and the guarded live runtime on the right. The live path still expects the caller or external integrations to supply payloads, features, prices, venue eligibility, and dependency state.
 
 ## At a Glance
 
@@ -101,6 +103,10 @@ python -m pytest -q --basetemp .tmp/pytest -p no:cacheprovider
 - Predictor path: a temporal attention model can consume per-step numeric features plus vector payloads to predict return, drawdown, probability-up, uncertainty, flow persistence, and regime
 - Attention layout: timestep embeddings are built with a 2-layer MLP, then passed through self-attention context blocks followed by causal attention blocks
 - Compatibility: legacy flat-feature predictor artifacts still load, so older tests and artifacts do not break immediately
+
+### Live Flow Detail
+
+![K-Swing Sentinel Live Architecture Flow](docs/architecture_flow.svg)
 
 ## Common Commands
 
