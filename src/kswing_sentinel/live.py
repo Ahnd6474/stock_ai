@@ -4,11 +4,7 @@ from datetime import datetime
 
 from .decision_engine import DecisionEngine
 from .execution_mapper import ExecutionMapper
-from .llm_event_normalizer import (
-    InternalContextSearchClient,
-    LLMEventNormalizer,
-    build_grok_only_market_llm_provider,
-)
+from .llm_event_normalizer import LLMEventNormalizer
 from .predictor import NumericFirstPredictor
 from .schemas import ExecutionRequest
 from .session_rules import classify_session
@@ -24,39 +20,77 @@ class LiveInferenceService:
         predictor: NumericFirstPredictor | None = None,
     ) -> None:
         self.mapper = ExecutionMapper()
-        self.normalizer = normalizer or LLMEventNormalizer(
-            prompt_version="normalizer_prompt_v2",
-            provider=build_grok_only_market_llm_provider(),
-            search_client=InternalContextSearchClient(),
-        )
+        self.normalizer = normalizer or LLMEventNormalizer(prompt_version="disabled")
         self.vectorizer = vectorizer or VectorizationPipeline()
         self.predictor = predictor or NumericFirstPredictor()
         self.decider = DecisionEngine()
         self._semantic_cache: dict[str, tuple[datetime, float]] = {}
         self.anchor_schedule = ["08:10", "08:40", "09:35", "12:30", "15:10", "15:35", "15:45", "18:30", "19:40", "20:05"]
+        self.uses_llm_normalizer = False
+        self.audit_prompt_version = "disabled"
+
+    @staticmethod
+    def _payload_text(raw_event_payload: dict) -> str:
+        fields = []
+        for key in ("headline", "title", "body", "text", "summary", "canonical_summary"):
+            value = str(raw_event_payload.get(key, "")).strip()
+            if value and value not in fields:
+                fields.append(value)
+        return "\n\n".join(fields)
+
+    @staticmethod
+    def _payload_list(raw_event_payload: dict, key: str) -> list[str]:
+        value = raw_event_payload.get(key, [])
+        if not isinstance(value, list):
+            return []
+        return [str(item) for item in value if str(item).strip()]
+
+    @staticmethod
+    def _payload_event_score(raw_event_payload: dict) -> float:
+        value = raw_event_payload.get("event_score", 0.0)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
 
     def run_for_symbol(self, symbol: str, as_of_time: datetime, raw_event_payload: dict, features: dict,
                        venue_eligibility: str, broker_supports_nxt: bool = True, venue_freshness_ok: bool = True,
                        session_liquidity_ok: bool = True, no_position: bool = True):
         session = classify_session(as_of_time)
-        sem = self.normalizer.normalize(raw_event_payload)
         features = dict(features)
-        try:
-            _ = self.vectorizer.build(
-                sem.canonical_summary,
-                source_doc_ids=list(getattr(sem, "source_doc_ids", []) or []),
-                cluster_ids=[getattr(sem, "cluster_id", "default")] if getattr(sem, "cluster_id", None) else [],
-                as_of_time=as_of_time,
-                session_type=session,
-            )
-            features.setdefault("text_branch_enabled", True)
-        except Exception:
+        raw_text = self._payload_text(raw_event_payload)
+        if raw_text:
+            try:
+                vector_payload = self.vectorizer.build(
+                    raw_text,
+                    source_doc_ids=self._payload_list(raw_event_payload, "source_doc_ids"),
+                    cluster_ids=self._payload_list(raw_event_payload, "cluster_ids"),
+                    as_of_time=as_of_time,
+                    session_type=session,
+                )
+                features["vector_payload"] = vector_payload
+                state_sequence = features.get("state_sequence")
+                if isinstance(state_sequence, list) and state_sequence:
+                    normalized_sequence: list[dict] = []
+                    last_index = max((index for index, state in enumerate(state_sequence) if isinstance(state, dict)), default=-1)
+                    for index, state in enumerate(state_sequence):
+                        if not isinstance(state, dict):
+                            continue
+                        normalized_state = dict(state)
+                        if index == last_index and "vector_payload" not in normalized_state and "vectors" not in normalized_state:
+                            normalized_state["vector_payload"] = vector_payload
+                        normalized_sequence.append(normalized_state)
+                    features["state_sequence"] = normalized_sequence
+                features.setdefault("text_branch_enabled", True)
+            except Exception:
+                features["text_branch_enabled"] = False
+        else:
             features["text_branch_enabled"] = False
         features.setdefault("flow_strength", 0.0)
         features.setdefault("trend_120m", 0.0)
         features.setdefault("extension_60m", 0.0)
-        features.setdefault("semantic_branch_enabled", sem.semantic_confidence > 0.0)
-        features["event_score"] = sem.event_score
+        features["semantic_branch_enabled"] = False
+        features.setdefault("event_score", self._payload_event_score(raw_event_payload))
         pred = self.predictor.predict(symbol, session, as_of_time, features)
         req = ExecutionRequest(
             symbol=symbol,

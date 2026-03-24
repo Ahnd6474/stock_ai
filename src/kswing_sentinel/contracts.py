@@ -104,6 +104,28 @@ class PredictorTrainingService(Protocol):
         model_version: str = "linear_multihead_v1",
     ) -> Path: ...
 
+    def train_temporal_transformer(
+        self,
+        rows: Sequence[Mapping[str, object]],
+        *,
+        numeric_feature_keys: Sequence[str] | None = None,
+        artifact_dir: str | Path,
+        sequence_key: str = "state_sequence",
+        vector_feature_dims: Mapping[str, int] | None = None,
+        max_seq_len: int = 32,
+        embedding_hidden_dim: int = 128,
+        d_model: int = 128,
+        context_num_layers: int = 1,
+        num_heads: int = 4,
+        num_layers: int = 2,
+        dropout: float = 0.1,
+        batch_size: int = 8,
+        epochs: int = 8,
+        lr: float = 1e-3,
+        device: str = "cpu",
+        model_version: str = "temporal_transformer_v1",
+    ) -> tuple[Path, Path, Path]: ...
+
 
 @runtime_checkable
 class CalibrationPipelineService(Protocol):

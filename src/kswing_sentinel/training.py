@@ -14,6 +14,14 @@ except Exception:  # pragma: no cover - optional dependency
     torch = None
     nn = None
 
+from .predictor import (
+    DEFAULT_TEMPORAL_NUMERIC_FEATURE_KEYS,
+    DEFAULT_TEMPORAL_SEQUENCE_KEY,
+    DEFAULT_VECTOR_FEATURE_DIMS,
+    REGIME_LABELS,
+    TemporalStateAttentionModel,
+    build_temporal_state_matrix,
+)
 from .text_encoder import DEFAULT_KOREAN_ROBERTA_MODEL_ID, TrainableRobertaEncoder
 
 
@@ -64,6 +72,55 @@ class RobertaTextRegressor(nn.Module if nn is not None else object):
     def forward_texts(self, texts: list[str]) -> Any:
         embeddings = self.encoder.forward_texts(texts)
         return self.head(embeddings).squeeze(-1)
+
+
+def _safe_float(value: object, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _clamp(value: float, low: float, high: float) -> float:
+    return max(low, min(high, value))
+
+
+def _resolve_temporal_vector_feature_dims(payload: object) -> dict[str, int]:
+    if not isinstance(payload, dict):
+        return dict(DEFAULT_VECTOR_FEATURE_DIMS)
+    out: dict[str, int] = {}
+    for key, value in payload.items():
+        try:
+            dim = int(value)
+        except (TypeError, ValueError):
+            continue
+        if dim > 0:
+            out[str(key)] = dim
+    return out or dict(DEFAULT_VECTOR_FEATURE_DIMS)
+
+
+def _left_pad_sequence_batch(
+    sequences: list[list[list[float]]],
+    *,
+    input_dim: int,
+    max_seq_len: int,
+    device: str,
+) -> tuple[Any, Any]:
+    if torch is None:
+        raise RuntimeError("torch is required for temporal transformer training")
+    trimmed = [sequence[-max_seq_len:] if max_seq_len > 0 else sequence for sequence in sequences]
+    batch_seq_len = max((len(sequence) for sequence in trimmed), default=1)
+    batch = torch.zeros((len(trimmed), batch_seq_len, input_dim), dtype=torch.float32, device=device)
+    padding_mask = torch.ones((len(trimmed), batch_seq_len), dtype=torch.bool, device=device)
+    for row_index, sequence in enumerate(trimmed):
+        if not sequence:
+            continue
+        seq_tensor = torch.tensor(sequence, dtype=torch.float32, device=device)
+        seq_len = int(seq_tensor.size(0))
+        start = batch_seq_len - seq_len
+        batch[row_index, start:, :] = seq_tensor
+        padding_mask[row_index, start:] = False
+    return batch, padding_mask
 
 
 class WalkForwardSplitter:
@@ -212,6 +269,220 @@ class TrainingPipeline:
         path.write_text(json.dumps(artifact, ensure_ascii=False, indent=2), encoding="utf-8")
         return path
 
+    def _temporal_regime_index(self, row: dict, sequence_key: str) -> int:
+        label = row.get("regime_final", row.get("regime"))
+        if label in REGIME_LABELS:
+            return REGIME_LABELS.index(str(label))
+
+        sequence = row.get(sequence_key)
+        latest = sequence[-1] if isinstance(sequence, list) and sequence else row
+        numeric = latest.get("numeric_features") if isinstance(latest, dict) else None
+        numeric_source = numeric if isinstance(numeric, dict) else latest if isinstance(latest, dict) else row
+
+        if bool(numeric_source.get("market_risk_off", row.get("market_risk_off", False))):
+            return REGIME_LABELS.index("risk_off")
+
+        event_score = _safe_float(numeric_source.get("event_score", row.get("event_score", 0.0)), 0.0)
+        trend_120m = _safe_float(numeric_source.get("trend_120m", row.get("trend_120m", 0.0)), 0.0)
+        if abs(event_score) >= 0.35:
+            return REGIME_LABELS.index("event")
+        if trend_120m > 0:
+            return REGIME_LABELS.index("trend")
+        return REGIME_LABELS.index("chop")
+
+    def _build_temporal_training_dataset(
+        self,
+        rows: list[dict],
+        *,
+        numeric_feature_keys: list[str],
+        sequence_key: str,
+        vector_feature_dims: dict[str, int],
+        max_seq_len: int,
+    ) -> list[dict]:
+        dataset: list[dict] = []
+        for row in rows:
+            if not all(label_key in row for label_key in ("er_20d", "dd_20d", "p_up_20d")):
+                continue
+            sequence_matrix = build_temporal_state_matrix(
+                row,
+                numeric_feature_keys=numeric_feature_keys,
+                vector_feature_dims=vector_feature_dims,
+                sequence_key=sequence_key,
+                max_seq_len=max_seq_len,
+            )
+            sequence = row.get(sequence_key)
+            latest = sequence[-1] if isinstance(sequence, list) and sequence else row
+            numeric = latest.get("numeric_features") if isinstance(latest, dict) else None
+            numeric_source = numeric if isinstance(numeric, dict) else latest if isinstance(latest, dict) else row
+            extension = _safe_float(numeric_source.get("extension_60m", row.get("extension_60m", 0.0)), 0.0)
+            flow_strength = _safe_float(numeric_source.get("flow_strength", row.get("flow_strength", 0.0)), 0.0)
+            dataset.append(
+                {
+                    "sequence": sequence_matrix,
+                    "targets": {
+                        "er_20d": _safe_float(row["er_20d"], 0.0),
+                        "dd_20d": _clamp(_safe_float(row["dd_20d"], 0.0), 0.0, 1.0),
+                        "p_up_20d": _clamp(_safe_float(row["p_up_20d"], 0.5), 0.0, 1.0),
+                        "uncertainty": _clamp(
+                            _safe_float(row.get("uncertainty"), 0.35 + 0.25 * abs(extension)),
+                            0.0,
+                            1.0,
+                        ),
+                        "flow_persist": _clamp(
+                            _safe_float(row.get("flow_persist"), 0.5 + 0.4 * flow_strength),
+                            0.0,
+                            1.0,
+                        ),
+                        "regime_index": self._temporal_regime_index(row, sequence_key),
+                    },
+                    "date": row.get("date"),
+                }
+            )
+        return dataset
+
+    def train_temporal_transformer(
+        self,
+        rows: list[dict],
+        *,
+        numeric_feature_keys: list[str] | None = None,
+        artifact_dir: str | Path,
+        sequence_key: str = DEFAULT_TEMPORAL_SEQUENCE_KEY,
+        vector_feature_dims: dict[str, int] | None = None,
+        max_seq_len: int = 32,
+        embedding_hidden_dim: int = 128,
+        d_model: int = 128,
+        context_num_layers: int = 1,
+        num_heads: int = 4,
+        num_layers: int = 2,
+        dropout: float = 0.1,
+        batch_size: int = 8,
+        epochs: int = 8,
+        lr: float = 1e-3,
+        device: str = "cpu",
+        model_version: str = "temporal_transformer_v1",
+    ) -> tuple[Path, Path, Path]:
+        if nn is None or torch is None:
+            raise RuntimeError("torch is required for temporal transformer training")
+        numeric_keys = list(numeric_feature_keys or DEFAULT_TEMPORAL_NUMERIC_FEATURE_KEYS)
+        resolved_vector_dims = _resolve_temporal_vector_feature_dims(vector_feature_dims)
+        dataset = self._build_temporal_training_dataset(
+            rows,
+            numeric_feature_keys=numeric_keys,
+            sequence_key=sequence_key,
+            vector_feature_dims=resolved_vector_dims,
+            max_seq_len=max_seq_len,
+        )
+        if not dataset:
+            raise ValueError("temporal transformer dataset is empty")
+
+        input_dim = len(numeric_keys) + sum(resolved_vector_dims.values())
+        model = TemporalStateAttentionModel(
+            input_dim=input_dim,
+            embedding_hidden_dim=embedding_hidden_dim,
+            d_model=d_model,
+            context_num_layers=context_num_layers,
+            num_heads=num_heads,
+            num_layers=num_layers,
+            dropout=dropout,
+            max_seq_len=max_seq_len,
+        )
+        model.to(device)
+        model.train()
+
+        optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+        mse_loss = nn.MSELoss()
+        ce_loss = nn.CrossEntropyLoss()
+        metrics: list[EpochLoss] = []
+
+        for epoch in range(epochs):
+            epoch_losses: list[float] = []
+            for start in range(0, len(dataset), max(1, batch_size)):
+                batch_rows = dataset[start : start + max(1, batch_size)]
+                state_batch, padding_mask = _left_pad_sequence_batch(
+                    [row["sequence"] for row in batch_rows],
+                    input_dim=input_dim,
+                    max_seq_len=max_seq_len,
+                    device=device,
+                )
+                outputs = model(state_batch, padding_mask=padding_mask)
+                er_targets = torch.tensor(
+                    [row["targets"]["er_20d"] for row in batch_rows],
+                    dtype=torch.float32,
+                    device=device,
+                )
+                dd_targets = torch.tensor(
+                    [row["targets"]["dd_20d"] for row in batch_rows],
+                    dtype=torch.float32,
+                    device=device,
+                )
+                pup_targets = torch.tensor(
+                    [row["targets"]["p_up_20d"] for row in batch_rows],
+                    dtype=torch.float32,
+                    device=device,
+                )
+                uncertainty_targets = torch.tensor(
+                    [row["targets"]["uncertainty"] for row in batch_rows],
+                    dtype=torch.float32,
+                    device=device,
+                )
+                flow_targets = torch.tensor(
+                    [row["targets"]["flow_persist"] for row in batch_rows],
+                    dtype=torch.float32,
+                    device=device,
+                )
+                regime_targets = torch.tensor(
+                    [row["targets"]["regime_index"] for row in batch_rows],
+                    dtype=torch.long,
+                    device=device,
+                )
+
+                optimizer.zero_grad()
+                loss = (
+                    mse_loss(outputs["er_20d"], er_targets)
+                    + mse_loss(outputs["dd_20d"], dd_targets)
+                    + mse_loss(outputs["p_up_20d"], pup_targets)
+                    + 0.5 * mse_loss(outputs["uncertainty"], uncertainty_targets)
+                    + 0.5 * mse_loss(outputs["flow_persist"], flow_targets)
+                    + 0.2 * ce_loss(outputs["regime_logits"], regime_targets)
+                )
+                loss.backward()
+                optimizer.step()
+                epoch_losses.append(float(loss.detach().cpu()))
+            metrics.append(EpochLoss(epoch=epoch + 1, loss=mean(epoch_losses) if epoch_losses else 0.0))
+
+        model.eval()
+        out_dir = Path(artifact_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        weights_path = out_dir / "temporal_transformer_weights.pt"
+        artifact_path = out_dir / "temporal_transformer_artifact.json"
+        metrics_path = out_dir / "temporal_transformer_metrics.json"
+        with weights_path.open("wb") as fh:
+            torch.save({"model_state_dict": model.state_dict()}, fh)
+        artifact_payload = {
+            "model_type": "temporal_transformer_v1",
+            "model_version": model_version,
+            "schema_version": "v3",
+            "sequence_key": sequence_key,
+            "numeric_feature_keys": numeric_keys,
+            "feature_keys": numeric_keys,
+            "vector_feature_dims": resolved_vector_dims,
+            "max_seq_len": max_seq_len,
+            "embedding_hidden_dim": embedding_hidden_dim,
+            "d_model": d_model,
+            "context_num_layers": context_num_layers,
+            "num_heads": num_heads,
+            "num_layers": num_layers,
+            "dropout": dropout,
+            "weights_path": weights_path.name,
+            "calibrator_version": "affine_v1",
+        }
+        artifact_path.write_text(json.dumps(artifact_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        metrics_path.write_text(
+            json.dumps([metric.__dict__ for metric in metrics], ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return weights_path, artifact_path, metrics_path
+
     def train_text_regressor(
         self,
         rows: list[dict],
@@ -277,7 +548,8 @@ class TrainingPipeline:
         weights_path = out_dir / "text_regressor_weights.pt"
         artifact_path = out_dir / "text_regressor_artifact.json"
         metrics_path = out_dir / "text_regressor_metrics.json"
-        torch.save(regressor.state_dict(), weights_path)
+        with weights_path.open("wb") as fh:
+            torch.save(regressor.state_dict(), fh)
         artifact_payload = {
             "model_version": model_version,
             "text_key": text_key,

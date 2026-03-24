@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 from .attention_aggregator import HierarchicalAttentionAggregator
 from .text_encoder import DEFAULT_KOREAN_ROBERTA_MODEL_ID, KoreanTextEncoder
 
 
-def _chunk_text(text: str, chunk_chars: int = 220, overlap_chars: int = 40) -> list[str]:
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+|[\r\n]+")
+
+
+def _chunk_long_sentence(text: str, chunk_chars: int = 220, overlap_chars: int = 40) -> list[str]:
     normalized = " ".join(text.split())
     if not normalized:
         return []
@@ -23,6 +27,23 @@ def _chunk_text(text: str, chunk_chars: int = 220, overlap_chars: int = 40) -> l
     return chunks
 
 
+def _sentence_units(text: str, max_sentence_chars: int = 220, overlap_chars: int = 40) -> list[str]:
+    normalized = " ".join(text.split())
+    if not normalized:
+        return []
+    raw_sentences = [item.strip() for item in _SENTENCE_SPLIT_RE.split(normalized) if item.strip()]
+    if not raw_sentences:
+        raw_sentences = [normalized]
+
+    units: list[str] = []
+    for sentence in raw_sentences:
+        if len(sentence) <= max_sentence_chars:
+            units.append(sentence)
+            continue
+        units.extend(_chunk_long_sentence(sentence, chunk_chars=max_sentence_chars, overlap_chars=overlap_chars))
+    return units
+
+
 class VectorizationPipeline:
     def __init__(
         self,
@@ -33,7 +54,7 @@ class VectorizationPipeline:
         encoder_version: str = "ko_roberta_v2",
         tokenizer_version: str = "auto",
         encoder_backend: str = "roberta",
-        attention_aggregator_version: str = "hier_attn_v2",
+        attention_aggregator_version: str = "hier_transformer_v3",
         prompt_version: str = "prompt_v1",
     ) -> None:
         self.encoder = encoder or KoreanTextEncoder(
@@ -43,7 +64,11 @@ class VectorizationPipeline:
             backend=encoder_backend,
         )
         self.aggregator = aggregator or HierarchicalAttentionAggregator()
-        self.attention_aggregator_version = attention_aggregator_version
+        self.attention_aggregator_version = attention_aggregator_version or getattr(
+            self.aggregator,
+            "version",
+            "hier_transformer_v3",
+        )
         self.prompt_version = prompt_version
         metadata = self.encoder.metadata()
         self.encoder_version = str(metadata["encoder_version"])
@@ -52,8 +77,8 @@ class VectorizationPipeline:
 
     def _encode_single_item(self, item: dict, dim: int) -> dict:
         text = str(item.get("text", ""))
-        chunks = _chunk_text(text)
-        if not chunks:
+        sentences = _sentence_units(text)
+        if not sentences:
             return {
                 "vec": [0.0] * dim,
                 "cluster_id": item.get("cluster_id", "default"),
@@ -62,8 +87,8 @@ class VectorizationPipeline:
                 "novelty_score": item.get("novelty_score", 0.0),
                 "semantic_confidence": item.get("semantic_confidence", 0.0),
             }
-        chunk_vectors = self.encoder.batch_encode(chunks, dim)
-        chunk_items = [
+        sentence_vectors = self.encoder.batch_encode(sentences, dim)
+        sentence_items = [
             {
                 "vec": vec,
                 "freshness_score": item.get("freshness_score", 0.8),
@@ -71,10 +96,10 @@ class VectorizationPipeline:
                 "novelty_score": item.get("novelty_score", 0.5),
                 "semantic_confidence": item.get("semantic_confidence", 0.7),
             }
-            for vec in chunk_vectors
+            for vec in sentence_vectors
         ]
         return {
-            "vec": self.aggregator.aggregate(chunk_items, dim),
+            "vec": self.aggregator.aggregate(sentence_items, dim),
             "cluster_id": item.get("cluster_id", "default"),
             "freshness_score": item.get("freshness_score", 0.8),
             "source_quality_score": item.get("source_quality_score", 0.8),
