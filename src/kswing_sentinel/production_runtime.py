@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import os
 import tomllib
+from dataclasses import dataclass
 from datetime import datetime
+from datetime import timedelta
 from pathlib import Path
+from typing import Callable
 from typing import Literal
 
 from pydantic import BaseModel
 
 from .audit_log import AuditLogStore, DecisionAuditEntry, RuntimeAuditEvent
-from .broker_gateway import BrokerCapabilities, BrokerGateway, ExecutionReport, OrderRequest
+from .broker_gateway import BrokerCapabilities, BrokerGateway, OrderRequest
 from .live import LiveInferenceService
 from .monitoring import Monitoring
 from .schemas import TradeDecision
@@ -90,6 +93,22 @@ class LiveOrderResult(BaseModel):
     filled_qty: int = 0
     rationale_codes: list[str]
     vetoes_triggered: list[str]
+
+
+@dataclass(frozen=True)
+class AnchorBatchDeadLetterRecord:
+    anchor_time: datetime
+    symbols: list[str]
+    payload_by_symbol: dict[str, dict]
+    features_by_symbol: dict[str, dict]
+    venue_eligibility_by_symbol: dict[str, str]
+    error_message: str
+    attempts: int
+    failed_at: datetime
+
+
+class ProductionCircuitBreakerOpen(RuntimeError):
+    pass
 
 
 def _model_dump(model: BaseModel) -> dict:
@@ -222,6 +241,7 @@ class ProductionTradingEngine:
         self.audit_store = audit_store or AuditLogStore()
         self.monitoring = monitoring or Monitoring()
         self.readiness_gate = readiness_gate or ProductionReadinessGate()
+        self._symbol_run_cache: dict[str, LiveOrderResult] = {}
 
     @classmethod
     def from_runtime_config(
@@ -285,6 +305,12 @@ class ProductionTradingEngine:
         broker_supports_nxt = report.trading_mode == "KRX_NXT" and self.broker_gateway.capabilities.supports_nxt
 
         for symbol in symbols:
+            cache_key = self._anchor_symbol_key(symbol, anchor_time)
+            cached_result = self._symbol_run_cache.get(cache_key)
+            if cached_result is not None:
+                results[symbol] = cached_result
+                continue
+
             venue_eligibility = venue_eligibility_by_symbol.get(symbol, "KRX_ONLY")
             if report.trading_mode == "KRX_ONLY":
                 venue_eligibility = "KRX_ONLY"
@@ -322,6 +348,21 @@ class ProductionTradingEngine:
                     expected_bps=decision.expected_slippage_bps,
                 )
 
+            # Cache completed symbol work before audit writes so same-anchor retries
+            # do not resubmit orders if a later monitoring or audit step fails.
+            result = LiveOrderResult(
+                symbol=symbol,
+                action=decision.action,
+                selected_venue=decision.selected_venue,
+                order_submitted=report_obj is not None,
+                order_id=report_obj.order_id if report_obj is not None else None,
+                execution_status=report_obj.status if report_obj is not None else None,
+                filled_qty=report_obj.filled_qty if report_obj is not None else 0,
+                rationale_codes=list(decision.rationale_codes),
+                vetoes_triggered=list(decision.vetoes_triggered or []),
+            )
+            self._symbol_run_cache[cache_key] = result
+
             self.audit_store.append(
                 DecisionAuditEntry(
                     symbol=symbol,
@@ -350,17 +391,7 @@ class ProductionTradingEngine:
                     )
                 )
 
-            results[symbol] = LiveOrderResult(
-                symbol=symbol,
-                action=decision.action,
-                selected_venue=decision.selected_venue,
-                order_submitted=report_obj is not None,
-                order_id=report_obj.order_id if report_obj is not None else None,
-                execution_status=report_obj.status if report_obj is not None else None,
-                filled_qty=report_obj.filled_qty if report_obj is not None else 0,
-                rationale_codes=list(decision.rationale_codes),
-                vetoes_triggered=list(decision.vetoes_triggered or []),
-            )
+            results[symbol] = result
 
         self.monitoring.emit_snapshot(
             anchor_time,
@@ -371,6 +402,10 @@ class ProductionTradingEngine:
             },
         )
         return report, results
+
+    @staticmethod
+    def _anchor_symbol_key(symbol: str, anchor_time: datetime) -> str:
+        return f"{anchor_time.isoformat()}:{symbol}"
 
     def _decision_to_order(
         self,
@@ -413,9 +448,87 @@ class ProductionTradingEngine:
 
 
 class ProductionOrchestrator:
-    def __init__(self, engine: ProductionTradingEngine) -> None:
+    def __init__(
+        self,
+        engine: ProductionTradingEngine,
+        *,
+        backoff_schedule_sec: tuple[float, ...] = (0.0, 0.25, 1.0),
+        circuit_breaker_threshold: int = 3,
+        circuit_breaker_cooldown_sec: float = 300.0,
+        sleep_fn: Callable[[float], None] | None = None,
+        now_fn: Callable[[], datetime] | None = None,
+    ) -> None:
         self.engine = engine
         self._idempotency_cache: dict[str, tuple[ProductionReadinessReport, dict[str, LiveOrderResult]]] = {}
+        self.backoff_schedule_sec = backoff_schedule_sec
+        self.circuit_breaker_threshold = circuit_breaker_threshold
+        self.circuit_breaker_cooldown = timedelta(seconds=circuit_breaker_cooldown_sec)
+        self.sleep_fn = sleep_fn or (lambda _: None)
+        self.now_fn = now_fn or datetime.utcnow
+        self.dead_letter_queue: list[AnchorBatchDeadLetterRecord] = []
+        self._failure_streak = 0
+        self._circuit_open_until: datetime | None = None
+
+    def _assert_circuit_closed(self, anchor_time: datetime) -> None:
+        if self._circuit_open_until is None:
+            return
+        if anchor_time >= self._circuit_open_until:
+            self._circuit_open_until = None
+            self._failure_streak = 0
+            return
+        raise ProductionCircuitBreakerOpen(f"circuit open until {self._circuit_open_until.isoformat()}")
+
+    def _record_failure(
+        self,
+        *,
+        anchor_time: datetime,
+        symbols: list[str],
+        payload_by_symbol: dict[str, dict],
+        features_by_symbol: dict[str, dict],
+        venue_eligibility_by_symbol: dict[str, str],
+        attempts: int,
+        error: Exception,
+    ) -> None:
+        self._failure_streak += 1
+        if self._failure_streak >= self.circuit_breaker_threshold:
+            self._circuit_open_until = anchor_time + self.circuit_breaker_cooldown
+        self.dead_letter_queue.append(
+            AnchorBatchDeadLetterRecord(
+                anchor_time=anchor_time,
+                symbols=list(symbols),
+                payload_by_symbol={symbol: dict(payload) for symbol, payload in payload_by_symbol.items()},
+                features_by_symbol={symbol: dict(features) for symbol, features in features_by_symbol.items()},
+                venue_eligibility_by_symbol=dict(venue_eligibility_by_symbol),
+                error_message=str(error),
+                attempts=attempts,
+                failed_at=self.now_fn(),
+            )
+        )
+        self.engine.audit_store.append_runtime_event(
+            RuntimeAuditEvent(
+                event_type="anchor_batch_failure",
+                event_time=anchor_time,
+                payload={
+                    "symbols": list(symbols),
+                    "attempts": attempts,
+                    "error": str(error),
+                },
+            )
+        )
+        self.engine.monitoring.record_degraded_mode()
+        self.engine.monitoring.emit_snapshot(
+            anchor_time,
+            {
+                "batch_failure": str(error),
+                "batch_attempts": attempts,
+                "symbols_processed": len(symbols),
+            },
+        )
+
+    def drain_dead_letters(self) -> list[AnchorBatchDeadLetterRecord]:
+        drained = list(self.dead_letter_queue)
+        self.dead_letter_queue.clear()
+        return drained
 
     def run_anchor(
         self,
@@ -432,23 +545,52 @@ class ProductionOrchestrator:
         equity_krw: float,
         position_qty_by_symbol: dict[str, int] | None = None,
         liquidity_score_by_symbol: dict[str, float] | None = None,
+        retry: int = 1,
     ) -> tuple[ProductionReadinessReport, dict[str, LiveOrderResult]]:
         idem_key = f"{anchor_time.isoformat()}:{','.join(sorted(symbols))}"
         if idem_key in self._idempotency_cache:
             return self._idempotency_cache[idem_key]
-        result = self.engine.run_live_anchor_batch(
-            symbols=symbols,
-            anchor_time=anchor_time,
-            payload_by_symbol=payload_by_symbol,
-            features_by_symbol=features_by_symbol,
-            venue_eligibility_by_symbol=venue_eligibility_by_symbol,
-            last_price_by_symbol=last_price_by_symbol,
-            dependency_state=dependency_state,
-            runtime_config=runtime_config,
-            model_requirements=model_requirements,
-            equity_krw=equity_krw,
-            position_qty_by_symbol=position_qty_by_symbol,
-            liquidity_score_by_symbol=liquidity_score_by_symbol,
-        )
-        self._idempotency_cache[idem_key] = result
-        return result
+        self._assert_circuit_closed(anchor_time)
+
+        last_exc: Exception | None = None
+        attempts = max(1, retry + 1)
+        for attempt in range(attempts):
+            try:
+                result = self.engine.run_live_anchor_batch(
+                    symbols=symbols,
+                    anchor_time=anchor_time,
+                    payload_by_symbol=payload_by_symbol,
+                    features_by_symbol=features_by_symbol,
+                    venue_eligibility_by_symbol=venue_eligibility_by_symbol,
+                    last_price_by_symbol=last_price_by_symbol,
+                    dependency_state=dependency_state,
+                    runtime_config=runtime_config,
+                    model_requirements=model_requirements,
+                    equity_krw=equity_krw,
+                    position_qty_by_symbol=position_qty_by_symbol,
+                    liquidity_score_by_symbol=liquidity_score_by_symbol,
+                )
+                self._failure_streak = 0
+                self._idempotency_cache[idem_key] = result
+                return result
+            except LiveTradingBlockedError:
+                raise
+            except Exception as exc:
+                last_exc = exc
+                if attempt < attempts - 1:
+                    backoff = self.backoff_schedule_sec[min(attempt, len(self.backoff_schedule_sec) - 1)]
+                    if backoff > 0:
+                        self.sleep_fn(backoff)
+
+        if last_exc is not None:
+            self._record_failure(
+                anchor_time=anchor_time,
+                symbols=symbols,
+                payload_by_symbol=payload_by_symbol,
+                features_by_symbol=features_by_symbol,
+                venue_eligibility_by_symbol=venue_eligibility_by_symbol,
+                attempts=attempts,
+                error=last_exc,
+            )
+            raise last_exc
+        raise RuntimeError("anchor batch failed without explicit exception")

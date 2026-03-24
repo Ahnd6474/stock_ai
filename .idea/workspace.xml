@@ -4,16 +4,18 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="1bb7c9f3-3fe9-4c50-b759-5b4f3369fa8f" name="변경" comment="">
-      <change beforePath="$PROJECT_DIR$/TODO.md" beforeDir="false" afterPath="$PROJECT_DIR$/TODO.md" afterDir="false" />
-    </list>
+    <list default="true" id="1bb7c9f3-3fe9-4c50-b759-5b4f3369fa8f" name="변경" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
+<<<<<<< Updated upstream
     <option name="cachedIndexableFilesCount" value="28005" />
+=======
+    <option name="cachedIndexableFilesCount" value="106" />
+>>>>>>> Stashed changes
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -32,10 +34,17 @@
     &quot;assignee&quot;: &quot;dannyahn123&quot;
   }
 }</component>
+<<<<<<< Updated upstream
   <component name="GithubPullRequestsUISettings">{
   &quot;selectedUrlAndAccountId&quot;: {
     &quot;url&quot;: &quot;https://github.com/Ahnd6474/stock_ai.git&quot;,
     &quot;accountId&quot;: &quot;56d00e47-32dc-4d18-b006-5c896ef8094e&quot;
+=======
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/Ahnd6474/stock_ai.git",
+    "accountId": "aa03bc6d-7ccf-4257-9bb5-82647602e549"
+>>>>>>> Stashed changes
   }
 }</component>
   <component name="HighlightingSettingsPerFile">
@@ -65,6 +74,10 @@
     &quot;ai.playground.ignore.import.keys.banner.in.settings&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;main&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+<<<<<<< Updated upstream
+=======
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/alber/OneDrive/문서/GitHub/stock_ai/data/training&quot;,
+>>>>>>> Stashed changes
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
@@ -73,7 +86,7 @@
     &quot;settings.editor.selected.configurable&quot;: &quot;configurable.group.tools&quot;,
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\alber\OneDrive\문서\GitHub\stock_ai\data\training" />
@@ -101,6 +114,7 @@
       <workItem from="1774171499662" duration="4811000" />
       <workItem from="1774177859822" duration="1328000" />
       <workItem from="1774337255300" duration="6587000" />
+      <workItem from="1774346741059" duration="388000" />
     </task>
     <servers />
   </component>

@@ -67,7 +67,7 @@
 - D1 `feature_store.py`: freshness/missingness/session flags + market context merge + online/offline parity 보강 (**DONE**)
 - D2 시장/거시 컨텍스트: KOSPI/KOSDAQ/futures/USDKRW/breadth 기반 regime context 병합 경로 추가 (**DONE**)
 - E1 `event_store.py`: cluster lineage + novelty score + canonical dedup/cluster 복원 경로 추가 (**DONE**)
-- F1 `orchestration.py`: retry/backoff + circuit breaker + dead-letter queue + semantic refresh mark 추가 (**IN_PROGRESS**)
+- F1 `orchestration.py` / `production_runtime.py`: retry/backoff + circuit breaker + dead-letter queue + anchor-batch idempotent retry 경로 추가 (**IN_PROGRESS**)
 
 ## 2026-03-20 구현 감사 상태
 
@@ -78,29 +78,27 @@
   - C2, C3, C1-EXT, C2-EXT, C3-EXT
   - D1, D2, D3, D4
   - E1, E2, E3
+  - F1 (batch retry/backoff/circuit breaker/DLQ + production runtime anchor re-entry)
 - 아직 todo 원문 기준으로 추가 구현이 필요한 영역
   - A4: corporate action / halt / suspension censoring hook
   - A5: portfolio mode 관점의 백테스트 확장
   - C1: LightGBM baseline 및 artifact/metric 표준화
-  - F1: production runtime 경로까지 retry/backoff/DLQ 일관 적용
+  - F1: semantic refresh 정책 고도화 + dead-letter 영속화 + 운영 복구 런북 정리
 
 ## 이번 변경 증적
 
-- Test command: `python -m pytest tests/test_feature_store_context.py tests/test_event_store_lineage.py tests/test_orchestration_resilience.py -q`
-- Test result: `6 passed`
+- Test command: `python -m pytest -q tests/test_production_runtime.py tests/test_orchestration_resilience.py tests/test_label_builder_extensions.py tests/test_backtester_portfolio.py`
+- Test result: `11 passed`
 - Regression command: `python -m pytest -q`
-- Regression result: `58 passed`
+- Regression result: `78 passed`
 - Rollback strategy:
-  - `src/kswing_sentinel/feature_store.py`
-  - `src/kswing_sentinel/event_store.py`
-  - `src/kswing_sentinel/orchestration.py`
-  - `src/kswing_sentinel/label_builder.py`
-  - `src/kswing_sentinel/backtester.py`
-  - `tests/test_feature_store_context.py`
-  - `tests/test_event_store_lineage.py`
-  - `tests/test_orchestration_resilience.py`
-  - `tests/test_label_builder_extensions.py`
-  - `tests/test_backtester_portfolio.py`
+  - `src/kswing_sentinel/production_runtime.py`
+  - `tests/test_production_runtime.py`
+  - `README.md`
+  - `docs/implementation_todo.md`
+  - `docs/approach_differentiators.md`
+  - `docs/architecture_block_diagram.svg`
+  - `docs/architecture_flow.svg`
 
 ---
 

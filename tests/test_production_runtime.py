@@ -3,15 +3,20 @@ import json
 
 import pytest
 
+from kswing_sentinel.audit_log import AuditLogStore
 from kswing_sentinel.broker_gateway import BrokerCapabilities, BrokerGateway
+from kswing_sentinel.monitoring import Monitoring
 from kswing_sentinel.production_runtime import (
     LiveTradingBlockedError,
     ModelRuntimeRequirements,
+    ProductionCircuitBreakerOpen,
+    ProductionOrchestrator,
     ProductionReadinessGate,
     ProductionRuntimeConfig,
     ProductionTradingEngine,
     RuntimeDependencyState,
 )
+from kswing_sentinel.schemas import TradeDecision
 
 
 def _deps(**overrides):
@@ -153,3 +158,152 @@ def test_engine_submits_krx_order_and_persists_audit(tmp_path):
     assert decision_records
     assert decision_records[0]["prompt_version"] == "disabled"
     assert len(metrics_lines) >= 1
+
+
+class FlakyBatchLiveService:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+        self._remaining_failures = {"000660": 1}
+        self.normalizer = type("NormalizerStub", (), {"prompt_version": "disabled"})()
+        self.vectorizer = type("VectorizerStub", (), {"encoder_version": "hashing_bow_v1"})()
+        artifact = type("ArtifactStub", (), {"model_version": "test_model_v1"})()
+        self.predictor = type("PredictorStub", (), {"artifact": artifact})()
+
+    def run_for_symbol(self, symbol, as_of_time, raw_event_payload, features, venue_eligibility, **kwargs):
+        self.calls.append(symbol)
+        remaining = self._remaining_failures.get(symbol, 0)
+        if remaining > 0:
+            self._remaining_failures[symbol] = remaining - 1
+            raise RuntimeError("transient live failure")
+        return TradeDecision(
+            symbol=symbol,
+            action="BUY",
+            target_weight=0.02,
+            tranche_ratio=0.4,
+            session_type="CORE_DAY",
+            selected_venue="KRX",
+            rationale_codes=["TEST_BUY"],
+            as_of_time=as_of_time,
+            execution_time=as_of_time,
+            vetoes_triggered=[],
+            risk_budget_used=0.02,
+            expected_slippage_bps=8.0,
+            degraded_mode_flags=[],
+            exit_policy_hint="test",
+        )
+
+
+def test_production_orchestrator_retries_without_duplicate_orders(tmp_path):
+    cfg = ProductionRuntimeConfig(
+        requested_trading_mode="KRX_ONLY",
+        audit_log_path=str(tmp_path / "audit.jsonl"),
+        metrics_log_path=str(tmp_path / "metrics.jsonl"),
+    )
+    live_service = FlakyBatchLiveService()
+    engine = ProductionTradingEngine.from_runtime_config(
+        runtime_config=cfg,
+        live_service=live_service,
+        broker_gateway=BrokerGateway(
+            BrokerCapabilities(
+                supports_nxt=True,
+                supports_after_market=True,
+                supports_live_trading=True,
+                supports_krx=True,
+                dry_run_only=False,
+            )
+        ),
+    )
+    waits: list[float] = []
+    orchestrator = ProductionOrchestrator(
+        engine,
+        backoff_schedule_sec=(0.1, 0.2),
+        sleep_fn=waits.append,
+    )
+
+    report, results = orchestrator.run_anchor(
+        symbols=["005930", "000660"],
+        anchor_time=datetime(2026, 3, 20, 9, 35, tzinfo=timezone.utc),
+        payload_by_symbol={"005930": {}, "000660": {}},
+        features_by_symbol={
+            "005930": {"flow_strength": 0.8, "trend_120m": 0.8, "extension_60m": 0.1},
+            "000660": {"flow_strength": 0.7, "trend_120m": 0.8, "extension_60m": 0.2},
+        },
+        venue_eligibility_by_symbol={"005930": "KRX_ONLY", "000660": "KRX_ONLY"},
+        last_price_by_symbol={"005930": 100000.0, "000660": 200000.0},
+        dependency_state=_deps(),
+        runtime_config=cfg,
+        model_requirements=ModelRuntimeRequirements(),
+        equity_krw=100_000_000,
+        retry=1,
+    )
+
+    assert report.ready is True
+    assert waits == [0.1]
+    assert live_service.calls == ["005930", "000660", "000660"]
+    assert engine.broker_gateway._counter == 2
+    assert set(results) == {"005930", "000660"}
+    assert all(result.order_submitted for result in results.values())
+
+    audit_lines = (tmp_path / "audit.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    audit_records = [json.loads(line) for line in audit_lines]
+    decision_records = [record for record in audit_records if record["record_type"] == "decision"]
+    assert len(decision_records) == 2
+
+
+class AlwaysFailingBatchEngine:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.audit_store = AuditLogStore()
+        self.monitoring = Monitoring()
+
+    def run_live_anchor_batch(self, **kwargs):
+        self.calls += 1
+        raise RuntimeError("persistent batch failure")
+
+
+def test_production_orchestrator_opens_circuit_and_drains_dead_letters():
+    engine = AlwaysFailingBatchEngine()
+    now = datetime(2026, 3, 20, 0, 0, tzinfo=timezone.utc)
+    orchestrator = ProductionOrchestrator(
+        engine,
+        circuit_breaker_threshold=1,
+        circuit_breaker_cooldown_sec=300,
+        now_fn=lambda: now,
+    )
+
+    with pytest.raises(RuntimeError):
+        orchestrator.run_anchor(
+            symbols=["005930"],
+            anchor_time=now,
+            payload_by_symbol={"005930": {}},
+            features_by_symbol={"005930": {"flow_strength": 0.1}},
+            venue_eligibility_by_symbol={"005930": "KRX_ONLY"},
+            last_price_by_symbol={"005930": 100000.0},
+            dependency_state=_deps(),
+            runtime_config=ProductionRuntimeConfig(requested_trading_mode="KRX_ONLY"),
+            model_requirements=ModelRuntimeRequirements(),
+            equity_krw=100_000_000,
+            retry=0,
+        )
+
+    assert len(orchestrator.dead_letter_queue) == 1
+
+    with pytest.raises(ProductionCircuitBreakerOpen):
+        orchestrator.run_anchor(
+            symbols=["005930"],
+            anchor_time=now.replace(minute=1),
+            payload_by_symbol={"005930": {}},
+            features_by_symbol={"005930": {"flow_strength": 0.1}},
+            venue_eligibility_by_symbol={"005930": "KRX_ONLY"},
+            last_price_by_symbol={"005930": 100000.0},
+            dependency_state=_deps(),
+            runtime_config=ProductionRuntimeConfig(requested_trading_mode="KRX_ONLY"),
+            model_requirements=ModelRuntimeRequirements(),
+            equity_krw=100_000_000,
+            retry=0,
+        )
+
+    drained = orchestrator.drain_dead_letters()
+    assert drained[0].attempts == 1
+    assert drained[0].error_message == "persistent batch failure"
+    assert orchestrator.dead_letter_queue == []
