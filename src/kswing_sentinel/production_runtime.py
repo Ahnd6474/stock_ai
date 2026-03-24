@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
 import tomllib
+from dataclasses import asdict
 from dataclasses import dataclass
 from datetime import datetime
 from datetime import timedelta
@@ -29,6 +31,7 @@ class ProductionRuntimeConfig(BaseModel):
     kill_switch_path: str | None = None
     audit_log_path: str | None = None
     metrics_log_path: str | None = None
+    dead_letter_log_path: str | None = None
 
     @classmethod
     def from_toml(cls, path: str | Path) -> "ProductionRuntimeConfig":
@@ -113,6 +116,16 @@ class ProductionCircuitBreakerOpen(RuntimeError):
 
 def _model_dump(model: BaseModel) -> dict:
     return model.model_dump() if hasattr(model, "model_dump") else model.dict()
+
+
+def _serialize_value(value: object) -> object:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(key): _serialize_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_serialize_value(item) for item in value]
+    return value
 
 
 class ProductionReadinessGate:
@@ -488,22 +501,22 @@ class ProductionOrchestrator:
         venue_eligibility_by_symbol: dict[str, str],
         attempts: int,
         error: Exception,
+        dead_letter_log_path: str | None,
     ) -> None:
+        record = AnchorBatchDeadLetterRecord(
+            anchor_time=anchor_time,
+            symbols=list(symbols),
+            payload_by_symbol={symbol: dict(payload) for symbol, payload in payload_by_symbol.items()},
+            features_by_symbol={symbol: dict(features) for symbol, features in features_by_symbol.items()},
+            venue_eligibility_by_symbol=dict(venue_eligibility_by_symbol),
+            error_message=str(error),
+            attempts=attempts,
+            failed_at=self.now_fn(),
+        )
         self._failure_streak += 1
         if self._failure_streak >= self.circuit_breaker_threshold:
             self._circuit_open_until = anchor_time + self.circuit_breaker_cooldown
-        self.dead_letter_queue.append(
-            AnchorBatchDeadLetterRecord(
-                anchor_time=anchor_time,
-                symbols=list(symbols),
-                payload_by_symbol={symbol: dict(payload) for symbol, payload in payload_by_symbol.items()},
-                features_by_symbol={symbol: dict(features) for symbol, features in features_by_symbol.items()},
-                venue_eligibility_by_symbol=dict(venue_eligibility_by_symbol),
-                error_message=str(error),
-                attempts=attempts,
-                failed_at=self.now_fn(),
-            )
-        )
+        self.dead_letter_queue.append(record)
         self.engine.audit_store.append_runtime_event(
             RuntimeAuditEvent(
                 event_type="anchor_batch_failure",
@@ -524,6 +537,38 @@ class ProductionOrchestrator:
                 "symbols_processed": len(symbols),
             },
         )
+        self._persist_dead_letter(record, dead_letter_log_path)
+
+    def _persist_dead_letter(
+        self,
+        record: AnchorBatchDeadLetterRecord,
+        dead_letter_log_path: str | None,
+    ) -> None:
+        if not dead_letter_log_path:
+            return
+        try:
+            path = Path(dead_letter_log_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "record_type": "dead_letter",
+                **_serialize_value(asdict(record)),
+            }
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        except OSError as persist_error:
+            try:
+                self.engine.audit_store.append_runtime_event(
+                    RuntimeAuditEvent(
+                        event_type="dead_letter_persist_failed",
+                        event_time=record.failed_at,
+                        payload={
+                            "path": dead_letter_log_path,
+                            "error": str(persist_error),
+                        },
+                    )
+                )
+            except OSError:
+                pass
 
     def drain_dead_letters(self) -> list[AnchorBatchDeadLetterRecord]:
         drained = list(self.dead_letter_queue)
@@ -591,6 +636,7 @@ class ProductionOrchestrator:
                 venue_eligibility_by_symbol=venue_eligibility_by_symbol,
                 attempts=attempts,
                 error=last_exc,
+                dead_letter_log_path=runtime_config.dead_letter_log_path,
             )
             raise last_exc
         raise RuntimeError("anchor batch failed without explicit exception")

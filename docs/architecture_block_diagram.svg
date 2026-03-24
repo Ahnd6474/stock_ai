@@ -129,9 +129,9 @@
   <text x="1190" y="980" class="box-title">Broker, Audit, And Monitoring</text>
   <text x="1190" y="1002" class="box-body">BrokerGateway, AuditLogStore, Monitoring</text>
 
-  <rect x="1330" y="120" width="250" height="70" class="note"/>
-  <text x="1352" y="150" class="small">Optional: LLMEventNormalizer exists</text>
-  <text x="1352" y="170" class="small">for offline or experimental paths</text>
+  <rect x="1350" y="54" width="250" height="62" class="note"/>
+  <text x="1372" y="79" class="small">Optional: LLMEventNormalizer exists</text>
+  <text x="1372" y="97" class="small">for offline or experimental paths</text>
 
   <path d="M300 340 L300 375" class="edge"/>
   <path d="M300 510 L300 545" class="edge"/>
@@ -150,9 +150,8 @@
 
   <path d="M1055 445 C1125 445, 1125 835, 1165 835" class="edge"/>
   <path d="M1055 790 C1125 790, 1125 625, 1165 625" class="edge-dash"/>
-  <text x="1075" y="778" class="small">external today</text>
 
-  <path d="M1420 190 L1420 395" class="edge-dash"/>
+  <path d="M1475 116 L1475 395" class="edge-dash"/>
 
   <rect x="70" y="1000" width="1540" height="58" class="note"/>
   <text x="94" y="1023" class="small">Primary runtime path: caller inputs -&gt; readiness gate -&gt; LiveInferenceService -&gt;</text>

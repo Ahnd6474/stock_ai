@@ -24,7 +24,7 @@ The diagram above shows the current repository boundary: offline data collection
 - Predictor loading for legacy linear and multi-head artifacts plus temporal attention artifacts
 - Direct raw-text vectorization with sentence-level RoBERTa encoding, hierarchical transformer aggregation, and a hashing fallback
 - Optional LLM event normalization with structured-output validation for experimental or offline paths
-- Audit logging, monitoring hooks, anchor-batch orchestration retries/circuit breaking, and production readiness checks
+- Audit logging, monitoring hooks, anchor-batch orchestration retries/circuit breaking, dead-letter JSONL persistence, and production readiness checks
 - Data-collection scripts and sample training datasets under `data/training/`
 
 ## What Is Still Partial
@@ -32,7 +32,7 @@ The diagram above shows the current repository boundary: offline data collection
 - Live inference exists, but external payloads, numeric features, venue eligibility, last prices, dependency state, and usually historical `state_sequence` inputs still have to be supplied by the caller
 - LLM integration supports OpenRouter-style providers, but credentials and provider operations are outside the repository
 - The temporal predictor now consumes vector payloads, but historical sequence building and feature persistence are not bundled yet
-- The production runtime can retry transient batch failures safely within the current process, but durable dead-letter persistence and operational recovery tooling are still not bundled
+- The production runtime can retry transient batch failures and persist dead letters when configured, but automated redrive and broader operator tooling are still not bundled
 - The predictor and training pipeline are still baseline scaffolds, not a production-scale research or serving stack
 - The backtester enforces execution realism better than a toy simulator, but it is not yet a full event-driven portfolio engine
 
@@ -170,7 +170,7 @@ The current live path expects the caller to provide:
 
 If a temporal predictor artifact is loaded, the most useful input shape is a `state_sequence` whose steps contain `numeric_features` and optional vector payloads. If only flat features are provided, the predictor falls back to a single-step sequence. That keeps the core logic testable, but it also means this repository does not yet include the surrounding production services needed for live deployment.
 
-`ProductionOrchestrator` now wraps anchor batches with retry/backoff, circuit-breaker protection, dead-letter capture, and anchor-level idempotency. `ProductionTradingEngine` also memoizes per-symbol results within an anchor so batch retries do not resubmit already completed orders in the same process.
+`ProductionOrchestrator` now wraps anchor batches with retry/backoff, circuit-breaker protection, dead-letter capture, optional JSONL persistence via `dead_letter_log_path`, and anchor-level idempotency. `ProductionTradingEngine` also memoizes per-symbol results within an anchor so batch retries do not resubmit already completed orders in the same process.
 
 ## Configuration and Data
 
@@ -178,7 +178,7 @@ If a temporal predictor artifact is loaded, the most useful input shape is a `st
   - Trading mode selection
   - Required environment variables
   - Kill switch path
-  - Audit and metrics log paths
+  - Audit, metrics, and dead-letter log paths
 - [`configs/semantic_stack.example.toml`](configs/semantic_stack.example.toml)
   - Search provider settings
   - LLM provider and model settings
@@ -206,6 +206,7 @@ TODO.md                   Working implementation checklist
 - Approach and differentiators: [`docs/approach_differentiators.md`](docs/approach_differentiators.md)
 - Roadmap draft: [`docs/ROADMAP_GITHUB_ISSUES.md`](docs/ROADMAP_GITHUB_ISSUES.md)
 - Detailed implementation notes: [`docs/implementation_todo.md`](docs/implementation_todo.md)
+- Dead-letter recovery runbook: [`docs/runbooks/dead_letter_recovery.md`](docs/runbooks/dead_letter_recovery.md)
 - Current task checklist: [`TODO.md`](TODO.md)
 
 ## Current Priorities
@@ -214,5 +215,5 @@ TODO.md                   Working implementation checklist
 - Replace remaining scaffold-level temporal predictor pieces with stronger trained artifacts
 - Connect live runtime inputs to real feature, event, and venue-eligibility sources
 - Expand execution realism, temporal labels, and portfolio simulation
-- Persist dead letters and operator-facing recovery workflows outside the process boundary
+- Add automated redrive and richer operator tooling on top of persisted dead letters
 - Keep README, TODOs, and architecture documents aligned with actual implementation status

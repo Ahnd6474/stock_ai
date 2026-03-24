@@ -134,7 +134,7 @@
   <text x="1335" y="580" class="box-title">Production Runtime</text>
   <text x="1335" y="607" class="box-body">readiness gate, retry/backoff,</text>
   <text x="1335" y="627" class="box-body">broker flow, circuit breaker,</text>
-  <text x="1335" y="647" class="box-body">degraded fallback, kill switch</text>
+  <text x="1335" y="647" class="box-body">dead-letter log, kill switch</text>
 
   <rect x="1310" y="710" width="200" height="125" class="decision"/>
   <text x="1335" y="745" class="box-title">Audit And Monitoring</text>

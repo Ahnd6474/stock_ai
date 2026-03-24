@@ -5,3 +5,4 @@ required_env_vars = ["KRX_FEED_KEY", "BROKER_API_KEY", "BROKER_ACCOUNT_ID"]
 kill_switch_path = "runtime/kill_switch.flag"
 audit_log_path = "runtime/audit/live_audit.jsonl"
 metrics_log_path = "runtime/audit/live_metrics.jsonl"
+dead_letter_log_path = "runtime/audit/dead_letters.jsonl"

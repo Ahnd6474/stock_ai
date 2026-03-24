@@ -307,3 +307,35 @@ def test_production_orchestrator_opens_circuit_and_drains_dead_letters():
     assert drained[0].attempts == 1
     assert drained[0].error_message == "persistent batch failure"
     assert orchestrator.dead_letter_queue == []
+
+
+def test_production_orchestrator_persists_dead_letters_when_configured(tmp_path):
+    engine = AlwaysFailingBatchEngine()
+    anchor_time = datetime(2026, 3, 20, 0, 0, tzinfo=timezone.utc)
+    dead_letter_path = tmp_path / "dead_letters.jsonl"
+    orchestrator = ProductionOrchestrator(engine, now_fn=lambda: anchor_time)
+
+    with pytest.raises(RuntimeError):
+        orchestrator.run_anchor(
+            symbols=["005930"],
+            anchor_time=anchor_time,
+            payload_by_symbol={"005930": {"headline": "failure case"}},
+            features_by_symbol={"005930": {"flow_strength": 0.1}},
+            venue_eligibility_by_symbol={"005930": "KRX_ONLY"},
+            last_price_by_symbol={"005930": 100000.0},
+            dependency_state=_deps(),
+            runtime_config=ProductionRuntimeConfig(
+                requested_trading_mode="KRX_ONLY",
+                dead_letter_log_path=str(dead_letter_path),
+            ),
+            model_requirements=ModelRuntimeRequirements(),
+            equity_krw=100_000_000,
+            retry=0,
+        )
+
+    records = [json.loads(line) for line in dead_letter_path.read_text(encoding="utf-8").splitlines()]
+    assert len(records) == 1
+    assert records[0]["record_type"] == "dead_letter"
+    assert records[0]["symbols"] == ["005930"]
+    assert records[0]["error_message"] == "persistent batch failure"
+    assert records[0]["payload_by_symbol"]["005930"]["headline"] == "failure case"
