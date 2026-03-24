@@ -16,19 +16,19 @@ It is not yet a turnkey live-trading system with bundled market data and broker 
 - KRX/NXT session classification, venue-aware routing rules, and conservative execution mapping
 - Decision logic, risk-aware trade action selection, and degraded fallback handling
 - Cost-aware backtesting utilities with no-lookahead validation
-- Walk-forward training scaffolding with artifact export
-- Numeric-first predictor loading local JSON artifacts
-- LLM event normalization with structured-output validation and numeric-only fallback
-- Text vectorization with a transformer-backed path and a hashing fallback
+- Walk-forward training scaffolding with linear, multi-head, text-regression, and temporal-transformer artifact export
+- Predictor loading for legacy linear and multi-head artifacts plus temporal attention artifacts
+- Direct raw-text vectorization with sentence-level RoBERTa encoding, hierarchical transformer aggregation, and a hashing fallback
+- Optional LLM event normalization with structured-output validation for experimental or offline paths
 - Audit logging, monitoring hooks, orchestration helpers, and production readiness checks
 - Data-collection scripts and sample training datasets under `data/training/`
 
 ## What Is Still Partial
 
-- Live inference exists, but external payloads, numeric features, venue eligibility, last prices, and dependency state still have to be supplied by the caller
+- Live inference exists, but external payloads, numeric features, venue eligibility, last prices, dependency state, and usually historical `state_sequence` inputs still have to be supplied by the caller
 - LLM integration supports OpenRouter-style providers, but credentials and provider operations are outside the repository
-- The text branch is validated and tracked, but its vectors are not yet fused into the default numeric predictor path
-- The predictor and training pipeline are baseline scaffolds, not a production-grade LightGBM or CatBoost stack
+- The temporal predictor now consumes vector payloads, but historical sequence building and feature persistence are not bundled yet
+- The predictor and training pipeline are still baseline scaffolds, not a production-scale research or serving stack
 - The backtester enforces execution realism better than a toy simulator, but it is not yet a full event-driven portfolio engine
 
 ## What Is Not Included Yet
@@ -92,6 +92,14 @@ On restricted environments, you may need to point pytest at a writable temp dire
 python -m pytest -q --basetemp .tmp/pytest -p no:cacheprovider
 ```
 
+## Current Model Stack
+
+- Live text path: raw payload text is vectorized directly, without requiring JSON normalization in the default live path
+- Text encoder path: sentence-level RoBERTa embeddings are aggregated by a hierarchical transformer into `z_event`, `z_social`, and `z_macro`
+- Predictor path: a temporal attention model can consume per-step numeric features plus vector payloads to predict return, drawdown, probability-up, uncertainty, flow persistence, and regime
+- Attention layout: timestep embeddings are built with a 2-layer MLP, then passed through self-attention context blocks followed by causal attention blocks
+- Compatibility: legacy flat-feature predictor artifacts still load, so older tests and artifacts do not break immediately
+
 ## Common Commands
 
 Run a focused test module:
@@ -100,6 +108,9 @@ Run a focused test module:
 python -m pytest -q tests/test_production_runtime.py
 python -m pytest -q tests/test_venue_router.py
 python -m pytest -q tests/test_training_pipeline_artifacts.py
+python -m pytest -q tests/test_live_direct_vectorization.py
+python -m pytest -q tests/test_vectorization_metadata.py
+python -m pytest -q tests/test_temporal_transformer_predictor.py
 ```
 
 Collect a small FinanceDataReader dataset:
@@ -114,7 +125,7 @@ Collect multi-timeframe Yahoo-based sample datasets:
 python scripts/collect_intraday_training_data.py --symbols 005930 000660 --prefix krx_sample
 ```
 
-Smoke-test the LLM normalizer path:
+Smoke-test the optional LLM normalizer path:
 
 ```bash
 python scripts/smoke_test_grok.py
@@ -131,19 +142,24 @@ There is no polished end-user CLI yet. The main integration points are Python cl
   - `ProductionOrchestrator`
 - [`src/kswing_sentinel/live.py`](src/kswing_sentinel/live.py)
   - `LiveInferenceService`
+- [`src/kswing_sentinel/training.py`](src/kswing_sentinel/training.py)
+  - `TrainingPipeline`
+- [`src/kswing_sentinel/predictor.py`](src/kswing_sentinel/predictor.py)
+  - `NumericFirstPredictor`
+  - `TemporalStateAttentionModel`
 
 The current live path expects the caller to provide:
 
 - symbols
 - raw event payloads
-- numeric features
+- numeric features or a `state_sequence`
 - venue eligibility flags
 - last prices
 - runtime dependency state
 - runtime config
 - model requirements
 
-That design keeps the core logic testable, but it also means this repository does not yet include the surrounding production services needed for live deployment.
+If a temporal predictor artifact is loaded, the most useful input shape is a `state_sequence` whose steps contain `numeric_features` and optional vector payloads. If only flat features are provided, the predictor falls back to a single-step sequence. That keeps the core logic testable, but it also means this repository does not yet include the surrounding production services needed for live deployment.
 
 ## Configuration and Data
 
@@ -175,6 +191,7 @@ TODO.md                   Working implementation checklist
 ## Key Documents
 
 - Architecture and operating rules: [`docs/k_swing_sentinel_v1_2.md`](docs/k_swing_sentinel_v1_2.md)
+- Temporal predictor and vector path: [`docs/temporal_predictor_architecture.md`](docs/temporal_predictor_architecture.md)
 - Approach and differentiators: [`docs/approach_differentiators.md`](docs/approach_differentiators.md)
 - Roadmap draft: [`docs/ROADMAP_GITHUB_ISSUES.md`](docs/ROADMAP_GITHUB_ISSUES.md)
 - Detailed implementation notes: [`docs/implementation_todo.md`](docs/implementation_todo.md)
@@ -182,7 +199,8 @@ TODO.md                   Working implementation checklist
 
 ## Current Priorities
 
-- Replace remaining scaffold-level predictor pieces with stronger trained artifacts
+- Build and persist historical timestep sequences for the temporal predictor path
+- Replace remaining scaffold-level temporal predictor pieces with stronger trained artifacts
 - Connect live runtime inputs to real feature, event, and venue-eligibility sources
-- Expand execution realism and portfolio simulation
+- Expand execution realism, temporal labels, and portfolio simulation
 - Keep README, TODOs, and architecture documents aligned with actual implementation status

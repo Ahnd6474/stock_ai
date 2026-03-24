@@ -290,10 +290,7 @@ class ProductionTradingEngine:
                 venue_eligibility = "KRX_ONLY"
 
             features = dict(features_by_symbol.get(symbol, {}))
-            features.setdefault("semantic_branch_enabled", dependency_state.semantic_provider_available)
             features.setdefault("text_branch_enabled", dependency_state.vectorizer_available)
-            if not dependency_state.semantic_provider_available:
-                features["event_score"] = 0.0
 
             decision = self.live.run_for_symbol(
                 symbol=symbol,
@@ -330,7 +327,7 @@ class ProductionTradingEngine:
                     symbol=symbol,
                     decision_time=anchor_time,
                     model_version=self.live.predictor.artifact.model_version,
-                    prompt_version=self.live.normalizer.prompt_version,
+                    prompt_version=getattr(self.live, "audit_prompt_version", self.live.normalizer.prompt_version),
                     vectorizer_version=self.live.vectorizer.encoder_version,
                     source_doc_ids=list(payload_by_symbol.get(symbol, {}).get("source_doc_ids", [])),
                     cluster_ids=list(payload_by_symbol.get(symbol, {}).get("cluster_ids", [])),

@@ -71,7 +71,7 @@ def example_vector_payload() -> dict:
         metadata={
             "encoder_version": "ko_roberta_v2",
             "tokenizer_version": "klue/roberta-base",
-            "attention_aggregator_version": "hier_attn_v2",
+            "attention_aggregator_version": "hier_transformer_v3",
             "prompt_version": "normalizer_prompt_v1.2",
             "embedding_backend": "roberta_mean_pool_v2",
             "source_doc_ids": ["dart_20260319_001", "news_a_991"],
