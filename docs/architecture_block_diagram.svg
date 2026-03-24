@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="1080" viewBox="0 0 1680 1080" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="1120" viewBox="0 0 1680 1120" role="img" aria-labelledby="title desc">
   <title id="title">K-Swing Sentinel Architecture Block Diagram</title>
   <desc id="desc">Block diagram showing offline data collection and training feeding model artifacts, and live runtime consuming caller inputs, vectorization, prediction, execution, audit, and monitoring.</desc>
   <defs>
@@ -36,15 +36,15 @@
     </style>
   </defs>
 
-  <rect x="0" y="0" width="1680" height="1080" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1680" height="1120" fill="url(#bg)"/>
 
   <text x="70" y="70" class="title">K-Swing Sentinel Architecture</text>
   <text x="70" y="98" class="subtitle">Offline data and training produce artifacts consumed by a guarded live runtime.</text>
   <text x="70" y="118" class="subtitle">Some live inputs still come from the caller or external integrations.</text>
 
-  <rect x="50" y="140" width="500" height="860" class="panel"/>
-  <rect x="590" y="140" width="500" height="860" class="panel"/>
-  <rect x="1130" y="140" width="500" height="860" class="panel"/>
+  <rect x="50" y="140" width="500" height="900" class="panel"/>
+  <rect x="590" y="140" width="500" height="900" class="panel"/>
+  <rect x="1130" y="140" width="500" height="900" class="panel"/>
 
   <text x="80" y="180" class="section">1. Offline Data And Training</text>
   <text x="620" y="180" class="section">2. Shared Assets</text>
@@ -108,9 +108,9 @@
   <rect x="1165" y="395" width="430" height="165" class="runtime"/>
   <text x="1190" y="430" class="box-title">Production Runtime Entry</text>
   <text x="1190" y="457" class="box-body">ProductionOrchestrator and ProductionTradingEngine</text>
-  <text x="1190" y="479" class="box-body">run readiness checks, idempotency, retry/backoff,</text>
-  <text x="1190" y="499" class="box-body">circuit breaker, kill-switch handling,</text>
-  <text x="1190" y="519" class="box-body">and runtime audit events</text>
+  <text x="1190" y="479" class="box-body">run readiness checks, semantic refresh marks,</text>
+  <text x="1190" y="499" class="box-body">idempotency, retry/backoff, circuit breaker,</text>
+  <text x="1190" y="519" class="box-body">kill-switch handling, and runtime audit events</text>
 
   <rect x="1165" y="575" width="430" height="155" class="runtime"/>
   <text x="1190" y="610" class="box-title">LiveInferenceService</text>
@@ -153,7 +153,7 @@
 
   <path d="M1475 116 L1475 395" class="edge-dash"/>
 
-  <rect x="70" y="1000" width="1540" height="58" class="note"/>
-  <text x="94" y="1023" class="small">Primary runtime path: caller inputs -&gt; readiness gate -&gt; LiveInferenceService -&gt;</text>
-  <text x="94" y="1043" class="small">vectorization and temporal prediction -&gt; decision and venue mapping -&gt; broker, audit, and metrics.</text>
+  <rect x="70" y="1050" width="1540" height="58" class="note"/>
+  <text x="94" y="1073" class="small">Primary runtime path: caller inputs -&gt; readiness gate -&gt; LiveInferenceService -&gt;</text>
+  <text x="94" y="1093" class="small">vectorization and temporal prediction -&gt; decision and venue mapping -&gt; broker, audit, and metrics.</text>
 </svg>

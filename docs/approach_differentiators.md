@@ -99,6 +99,7 @@
 
 - `ProductionReadinessGate`가 feed, broker, artifact, audit sink 상태를 먼저 평가한다.
 - `ProductionOrchestrator`는 anchor batch에서 transient failure가 나면 backoff 재시도, circuit breaker, dead-letter queue, optional JSONL persistence로 복원 가능성을 남긴다.
+- production runtime은 문서에 적힌 semantic refresh anchor(08:10, 09:35, 15:45, 20:05)와 event-burst payload를 기준으로 refresh 요청을 표시하고 audit event로 남긴다.
 - text/vectorizer가 실패하면 branch를 끄고 보수적으로 후퇴한다.
 - audit에는 model version, prompt version, vectorizer version, source doc id, cluster id, rationale code가 남는다.
 

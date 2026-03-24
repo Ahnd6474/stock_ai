@@ -67,33 +67,35 @@
 - D1 `feature_store.py`: freshness/missingness/session flags + market context merge + online/offline parity 보강 (**DONE**)
 - D2 시장/거시 컨텍스트: KOSPI/KOSDAQ/futures/USDKRW/breadth 기반 regime context 병합 경로 추가 (**DONE**)
 - E1 `event_store.py`: cluster lineage + novelty score + canonical dedup/cluster 복원 경로 추가 (**DONE**)
-- F1 `orchestration.py` / `production_runtime.py`: retry/backoff + circuit breaker + dead-letter queue + anchor-batch idempotent retry + dead-letter JSONL persistence 추가 (**IN_PROGRESS**)
+- F1 `orchestration.py` / `production_runtime.py`: retry/backoff + circuit breaker + dead-letter queue + anchor-batch idempotent retry + dead-letter JSONL persistence + semantic refresh policy mark 추가 (**IN_PROGRESS**)
 
 ## 2026-03-24 구현 감사 상태
 
-- `pytest -q` 기준 전체 테스트: **79 passed**
+- `pytest -q` 기준 전체 테스트: **80 passed**
 - 코드/테스트 기준 사실상 완료 또는 강하게 반영된 영역
   - A1, A2, A3
   - B1, B2, B3, B4
   - C2, C3, C1-EXT, C2-EXT, C3-EXT
   - D1, D2, D3, D4
   - E1, E2, E3
-  - F1 (batch retry/backoff/circuit breaker/DLQ + production runtime anchor re-entry)
+  - F1 (batch retry/backoff/circuit breaker/DLQ + production runtime anchor re-entry + semantic refresh marking)
 - 아직 todo 원문 기준으로 추가 구현이 필요한 영역
   - A4: corporate action / halt / suspension censoring hook
   - A5: portfolio mode 관점의 백테스트 확장
   - C1: LightGBM baseline 및 artifact/metric 표준화
-  - F1: semantic refresh 정책 고도화 + dead-letter 자동 redrive + 운영 복구 절차 확장
+  - F1: semantic refresh의 실제 live semantic branch 연결 + dead-letter 자동 redrive + 운영 복구 절차 확장
 
 ## 이번 변경 증적
 
 - Test command: `python -m pytest -q tests/test_production_runtime.py tests/test_orchestration_resilience.py tests/test_label_builder_extensions.py tests/test_backtester_portfolio.py`
-- Test result: `12 passed`
+- Test result: `13 passed`
 - Regression command: `python -m pytest -q`
-- Regression result: `79 passed`
+- Regression result: `80 passed`
 - Rollback strategy:
   - `configs/production_runtime.example.toml`
+  - `src/kswing_sentinel/live.py`
   - `src/kswing_sentinel/production_runtime.py`
+  - `tests/test_live_direct_vectorization.py`
   - `tests/test_production_runtime.py`
   - `README.md`
   - `docs/implementation_todo.md`

@@ -26,6 +26,7 @@ class LiveInferenceService:
         self.decider = DecisionEngine()
         self._semantic_cache: dict[str, tuple[datetime, float]] = {}
         self.anchor_schedule = ["08:10", "08:40", "09:35", "12:30", "15:10", "15:35", "15:45", "18:30", "19:40", "20:05"]
+        self.semantic_refresh_anchors = {"08:10", "09:35", "15:45", "20:05"}
         self.uses_llm_normalizer = False
         self.audit_prompt_version = "disabled"
 
@@ -53,11 +54,50 @@ class LiveInferenceService:
         except (TypeError, ValueError):
             return 0.0
 
+    @staticmethod
+    def _payload_bool(raw_event_payload: dict, key: str) -> bool:
+        value = raw_event_payload.get(key, False)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on", "y"}
+        return False
+
+    def describe_semantic_refresh(self, as_of_time: datetime, raw_event_payload: dict) -> tuple[bool, str | None]:
+        explicit = raw_event_payload.get("semantic_refresh_required")
+        if explicit is not None:
+            if self._payload_bool(raw_event_payload, "semantic_refresh_required"):
+                return True, "PAYLOAD_OVERRIDE"
+            return False, "PAYLOAD_OVERRIDE_DISABLED"
+
+        reasons: list[str] = []
+        anchor_label = as_of_time.strftime("%H:%M")
+        if anchor_label in self.semantic_refresh_anchors:
+            reasons.append("ANCHOR_SCHEDULE")
+
+        event_score = abs(self._payload_event_score(raw_event_payload))
+        if self._payload_bool(raw_event_payload, "event_burst") or self._payload_bool(raw_event_payload, "breaking"):
+            reasons.append("EVENT_BURST")
+        elif event_score >= 0.7:
+            reasons.append("HIGH_EVENT_SCORE")
+        elif event_score >= 0.5 and self._payload_bool(raw_event_payload, "fresh"):
+            reasons.append("FRESH_HIGH_EVENT")
+
+        if not reasons:
+            return False, None
+        return True, "+".join(reasons)
+
     def run_for_symbol(self, symbol: str, as_of_time: datetime, raw_event_payload: dict, features: dict,
                        venue_eligibility: str, broker_supports_nxt: bool = True, venue_freshness_ok: bool = True,
                        session_liquidity_ok: bool = True, no_position: bool = True):
         session = classify_session(as_of_time)
         features = dict(features)
+        semantic_refresh_required, semantic_refresh_reason = self.describe_semantic_refresh(as_of_time, raw_event_payload)
+        features["semantic_refresh_required"] = semantic_refresh_required
+        if semantic_refresh_reason is not None:
+            features["semantic_refresh_reason"] = semantic_refresh_reason
         raw_text = self._payload_text(raw_event_payload)
         if raw_text:
             try:

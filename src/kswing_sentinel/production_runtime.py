@@ -5,6 +5,7 @@ import os
 import tomllib
 from dataclasses import asdict
 from dataclasses import dataclass
+from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 from pathlib import Path
@@ -324,6 +325,26 @@ class ProductionTradingEngine:
                 results[symbol] = cached_result
                 continue
 
+            raw_event_payload = dict(payload_by_symbol.get(symbol, {}))
+            semantic_refresh_required, semantic_refresh_reason = self._describe_semantic_refresh(
+                anchor_time,
+                raw_event_payload,
+            )
+            raw_event_payload.setdefault("semantic_refresh_required", semantic_refresh_required)
+            if semantic_refresh_reason is not None:
+                raw_event_payload.setdefault("semantic_refresh_reason", semantic_refresh_reason)
+            if semantic_refresh_required and semantic_refresh_reason is not None:
+                self.audit_store.append_runtime_event(
+                    RuntimeAuditEvent(
+                        event_type="semantic_refresh_requested",
+                        event_time=anchor_time,
+                        payload={
+                            "symbol": symbol,
+                            "reason": semantic_refresh_reason,
+                        },
+                    )
+                )
+
             venue_eligibility = venue_eligibility_by_symbol.get(symbol, "KRX_ONLY")
             if report.trading_mode == "KRX_ONLY":
                 venue_eligibility = "KRX_ONLY"
@@ -334,7 +355,7 @@ class ProductionTradingEngine:
             decision = self.live.run_for_symbol(
                 symbol=symbol,
                 as_of_time=anchor_time,
-                raw_event_payload=payload_by_symbol.get(symbol, {}),
+                raw_event_payload=raw_event_payload,
                 features=features,
                 venue_eligibility=venue_eligibility,
                 broker_supports_nxt=broker_supports_nxt,
@@ -383,8 +404,8 @@ class ProductionTradingEngine:
                     model_version=self.live.predictor.artifact.model_version,
                     prompt_version=getattr(self.live, "audit_prompt_version", self.live.normalizer.prompt_version),
                     vectorizer_version=self.live.vectorizer.encoder_version,
-                    source_doc_ids=list(payload_by_symbol.get(symbol, {}).get("source_doc_ids", [])),
-                    cluster_ids=list(payload_by_symbol.get(symbol, {}).get("cluster_ids", [])),
+                    source_doc_ids=list(raw_event_payload.get("source_doc_ids", [])),
+                    cluster_ids=list(raw_event_payload.get("cluster_ids", [])),
                     selected_venue=decision.selected_venue,
                     rationale_codes=list(decision.rationale_codes),
                 )
@@ -419,6 +440,16 @@ class ProductionTradingEngine:
     @staticmethod
     def _anchor_symbol_key(symbol: str, anchor_time: datetime) -> str:
         return f"{anchor_time.isoformat()}:{symbol}"
+
+    def _describe_semantic_refresh(
+        self,
+        anchor_time: datetime,
+        raw_event_payload: dict,
+    ) -> tuple[bool, str | None]:
+        describe = getattr(self.live, "describe_semantic_refresh", None)
+        if callable(describe):
+            return describe(anchor_time, raw_event_payload)
+        return False, None
 
     def _decision_to_order(
         self,
@@ -477,7 +508,7 @@ class ProductionOrchestrator:
         self.circuit_breaker_threshold = circuit_breaker_threshold
         self.circuit_breaker_cooldown = timedelta(seconds=circuit_breaker_cooldown_sec)
         self.sleep_fn = sleep_fn or (lambda _: None)
-        self.now_fn = now_fn or datetime.utcnow
+        self.now_fn = now_fn or (lambda: datetime.now(UTC))
         self.dead_letter_queue: list[AnchorBatchDeadLetterRecord] = []
         self._failure_streak = 0
         self._circuit_open_until: datetime | None = None

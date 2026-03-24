@@ -114,6 +114,8 @@ def test_live_service_bypasses_llm_and_vectorizes_raw_event_text():
     assert "vector_payload" not in predictor.calls[0]["state_sequence"][0]
     assert predictor.calls[0]["state_sequence"][-1]["vector_payload"]["metadata"]["embedding_backend"] == "stub"
     assert predictor.calls[0]["semantic_branch_enabled"] is False
+    assert predictor.calls[0]["semantic_refresh_required"] is True
+    assert predictor.calls[0]["semantic_refresh_reason"] == "ANCHOR_SCHEDULE"
     assert predictor.calls[0]["text_branch_enabled"] is True
     assert predictor.calls[0]["event_score"] == 0.33
     assert decision.action == "BUY"
@@ -138,5 +140,33 @@ def test_live_service_disables_text_branch_when_no_raw_text_exists():
 
     assert vectorizer.calls == []
     assert predictor.calls[0]["semantic_branch_enabled"] is False
+    assert predictor.calls[0]["semantic_refresh_required"] is True
+    assert predictor.calls[0]["semantic_refresh_reason"] == "ANCHOR_SCHEDULE"
     assert predictor.calls[0]["text_branch_enabled"] is False
     assert predictor.calls[0]["event_score"] == 0.0
+
+
+def test_live_service_marks_event_burst_semantic_refresh_between_refresh_anchors():
+    vectorizer = RecordingVectorizer()
+    predictor = RecordingPredictor()
+    live = LiveInferenceService(
+        normalizer=ExplodingNormalizer(),
+        vectorizer=vectorizer,
+        predictor=predictor,
+    )
+
+    live.run_for_symbol(
+        symbol="005930",
+        as_of_time=datetime(2026, 3, 20, 12, 30, tzinfo=timezone.utc),
+        raw_event_payload={
+            "headline": "Breaking filing",
+            "body": "Unexpected capital plan update.",
+            "event_burst": True,
+            "event_score": 0.8,
+        },
+        features={"flow_strength": 0.1, "trend_120m": 0.8, "extension_60m": 0.1},
+        venue_eligibility="KRX_ONLY",
+    )
+
+    assert predictor.calls[0]["semantic_refresh_required"] is True
+    assert predictor.calls[0]["semantic_refresh_reason"] == "EVENT_BURST"

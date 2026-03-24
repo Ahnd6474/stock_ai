@@ -154,6 +154,10 @@ def test_engine_submits_krx_order_and_persists_audit(tmp_path):
     metrics_lines = (tmp_path / "metrics.jsonl").read_text(encoding="utf-8").strip().splitlines()
     audit_records = [json.loads(line) for line in audit_lines]
     assert any(record["record_type"] == "runtime_event" for record in audit_records)
+    assert any(
+        record["record_type"] == "runtime_event" and record["event_type"] == "semantic_refresh_requested"
+        for record in audit_records
+    )
     decision_records = [record for record in audit_records if record["record_type"] == "decision"]
     assert decision_records
     assert decision_records[0]["prompt_version"] == "disabled"
