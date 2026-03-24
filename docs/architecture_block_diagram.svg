@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1680" height="1120" viewBox="0 0 1680 1120" role="img" aria-labelledby="title desc">
-  <title id="title">K-Swing Sentinel Architecture Block Diagram</title>
-  <desc id="desc">Block diagram showing offline data collection and training feeding model artifacts, and live runtime consuming caller inputs, vectorization, prediction, execution, audit, and monitoring.</desc>
+  <title id="title">K-Swing Sentinel 아키텍처 블록 다이어그램</title>
+  <desc id="desc">오프라인 데이터 수집과 학습이 모델 아티팩트를 만들고, 라이브 런타임이 호출자 입력, 벡터화, 예측, 실행, 감사, 모니터링을 처리하는 구조를 보여준다.</desc>
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#f6f1e8"/>
@@ -17,12 +17,12 @@
       <path d="M0,0 L14,7 L0,14 z" fill="#6b7280"/>
     </marker>
     <style>
-      .title { font: 700 34px Georgia, "Times New Roman", serif; fill: #19342e; }
-      .subtitle { font: 400 15px "Trebuchet MS", Verdana, sans-serif; fill: #46615a; }
-      .section { font: 700 20px "Trebuchet MS", Verdana, sans-serif; fill: #1f4038; }
-      .box-title { font: 700 18px "Trebuchet MS", Verdana, sans-serif; fill: #122a24; }
-      .box-body { font: 400 13px "Trebuchet MS", Verdana, sans-serif; fill: #35504a; }
-      .small { font: 400 12px "Trebuchet MS", Verdana, sans-serif; fill: #5d6e6a; }
+      .title { font: 700 34px "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; fill: #19342e; }
+      .subtitle { font: 400 15px "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; fill: #46615a; }
+      .section { font: 700 20px "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; fill: #1f4038; }
+      .box-title { font: 700 17px "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; fill: #122a24; }
+      .box-body { font: 400 12px "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; fill: #35504a; }
+      .small { font: 400 11px "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; fill: #5d6e6a; }
       .panel { fill: url(#panel); stroke: #d5dfdc; stroke-width: 2; rx: 26; }
       .shared { fill: #f4efe4; stroke: #cbb892; stroke-width: 2.5; rx: 24; }
       .source { fill: #fff8e7; stroke: #ddc27d; stroke-width: 2.5; rx: 22; }
@@ -38,100 +38,100 @@
 
   <rect x="0" y="0" width="1680" height="1120" fill="url(#bg)"/>
 
-  <text x="70" y="70" class="title">K-Swing Sentinel Architecture</text>
-  <text x="70" y="98" class="subtitle">Offline data and training produce artifacts consumed by a guarded live runtime.</text>
-  <text x="70" y="118" class="subtitle">Some live inputs still come from the caller or external integrations.</text>
+  <text x="70" y="70" class="title">K-Swing Sentinel 아키텍처</text>
+  <text x="70" y="98" class="subtitle">오프라인 데이터와 학습이 아티팩트를 만들고, 보호된 라이브 런타임이 이를 사용합니다.</text>
+  <text x="70" y="118" class="subtitle">일부 라이브 입력은 여전히 호출자나 외부 연동에서 공급됩니다.</text>
 
   <rect x="50" y="140" width="500" height="900" class="panel"/>
   <rect x="590" y="140" width="500" height="900" class="panel"/>
   <rect x="1130" y="140" width="500" height="900" class="panel"/>
 
-  <text x="80" y="180" class="section">1. Offline Data And Training</text>
-  <text x="620" y="180" class="section">2. Shared Assets</text>
-  <text x="1160" y="180" class="section">3. Live Runtime And Execution</text>
+  <text x="80" y="180" class="section">1. 오프라인 데이터와 학습</text>
+  <text x="620" y="180" class="section">2. 공유 자산</text>
+  <text x="1160" y="180" class="section">3. 라이브 런타임과 실행</text>
 
   <rect x="85" y="220" width="430" height="120" class="source"/>
-  <text x="110" y="255" class="box-title">Market Data Sources</text>
-  <text x="110" y="282" class="box-body">FinanceDataReader, Yahoo, sample CSV files,</text>
-  <text x="110" y="304" class="box-body">data/training/, and future feed integrations</text>
+  <text x="110" y="255" class="box-title">시장 데이터 소스</text>
+  <text x="110" y="282" class="box-body">FinanceDataReader, Yahoo, 샘플 CSV,</text>
+  <text x="110" y="304" class="box-body">data/training/, 향후 피드 연동</text>
 
   <rect x="85" y="375" width="430" height="135" class="offline"/>
-  <text x="110" y="410" class="box-title">Collection And Feature Scripts</text>
+  <text x="110" y="410" class="box-title">수집 및 피처 스크립트</text>
   <text x="110" y="437" class="box-body">scripts/collect_fdr_training_data.py</text>
   <text x="110" y="459" class="box-body">scripts/collect_intraday_training_data.py</text>
-  <text x="110" y="481" class="box-body">fdr_dataset.py and intraday_dataset.py</text>
-  <text x="110" y="501" class="box-body">build rows and labels</text>
+  <text x="110" y="481" class="box-body">fdr_dataset.py, intraday_dataset.py</text>
+  <text x="110" y="501" class="box-body">학습 row와 label 생성</text>
 
   <rect x="85" y="545" width="430" height="170" class="offline"/>
   <text x="110" y="580" class="box-title">TrainingPipeline</text>
-  <text x="110" y="607" class="box-body">Walk-forward linear baseline and multi-head training</text>
-  <text x="110" y="629" class="box-body">TemporalStateAttentionModel training</text>
-  <text x="110" y="649" class="box-body">and metrics export</text>
-  <text x="110" y="671" class="box-body">Optional RoBERTa text regressor fine-tuning</text>
+  <text x="110" y="607" class="box-body">walk-forward 선형 baseline과 multi-head 학습</text>
+  <text x="110" y="629" class="box-body">TemporalStateAttentionModel 학습</text>
+  <text x="110" y="649" class="box-body">및 metric export</text>
+  <text x="110" y="671" class="box-body">선택적 RoBERTa text regressor 미세조정</text>
   <text x="110" y="691" class="box-body">src/kswing_sentinel/training.py</text>
 
   <rect x="85" y="750" width="430" height="125" class="note"/>
-  <text x="110" y="785" class="box-title">Offline Outputs</text>
-  <text x="110" y="812" class="box-body">artifact.json, weights.pt, fold metrics, sample datasets,</text>
-  <text x="110" y="834" class="box-body">and schema-compatible predictor artifacts</text>
+  <text x="110" y="785" class="box-title">오프라인 산출물</text>
+  <text x="110" y="812" class="box-body">artifact.json, weights.pt, fold metrics, 샘플 데이터셋,</text>
+  <text x="110" y="834" class="box-body">스키마 호환 predictor artifact</text>
 
   <rect x="625" y="220" width="430" height="120" class="shared"/>
-  <text x="650" y="255" class="box-title">Configurations</text>
+  <text x="650" y="255" class="box-title">설정</text>
   <text x="650" y="282" class="box-body">configs/production_runtime.example.toml</text>
   <text x="650" y="304" class="box-body">configs/semantic_stack.example.toml</text>
-  <text x="650" y="324" class="box-body">and environment variables</text>
+  <text x="650" y="324" class="box-body">및 환경 변수</text>
 
   <rect x="625" y="375" width="430" height="140" class="shared"/>
-  <text x="650" y="410" class="box-title">Model Artifacts And Metadata</text>
-  <text x="650" y="437" class="box-body">numeric feature keys, vector dims, sequence key,</text>
-  <text x="650" y="459" class="box-body">temporal weights path, calibrator version, model version</text>
-  <text x="650" y="481" class="box-body">loaded by NumericFirstPredictor at runtime</text>
+  <text x="650" y="410" class="box-title">모델 아티팩트와 메타데이터</text>
+  <text x="650" y="437" class="box-body">numeric feature key, vector dim, sequence key,</text>
+  <text x="650" y="459" class="box-body">temporal weights path, calibrator/model version</text>
+  <text x="650" y="481" class="box-body">런타임에서 NumericFirstPredictor가 로드</text>
 
   <rect x="625" y="550" width="430" height="145" class="shared"/>
-  <text x="650" y="585" class="box-title">Core Package Surface</text>
-  <text x="650" y="612" class="box-body">src/kswing_sentinel/ contains the reusable modules</text>
-  <text x="650" y="634" class="box-body">for vectorization, prediction, execution, audit, and tests</text>
-  <text x="650" y="656" class="box-body">README and docs describe scope, constraints, and roadmap</text>
+  <text x="650" y="585" class="box-title">코어 패키지</text>
+  <text x="650" y="612" class="box-body">src/kswing_sentinel/의 재사용 모듈</text>
+  <text x="650" y="634" class="box-body">벡터화, 예측, 실행, 감사, 테스트를 포함</text>
+  <text x="650" y="656" class="box-body">README와 docs가 범위, 제약, 로드맵 설명</text>
 
   <rect x="625" y="730" width="430" height="145" class="note"/>
-  <text x="650" y="765" class="box-title">Important Boundary</text>
-  <text x="650" y="792" class="box-body">The repository supplies the runtime scaffold and model path,</text>
-  <text x="650" y="814" class="box-body">but live market data, broker credentials, feature persistence,</text>
-  <text x="650" y="836" class="box-body">and historical state-sequence assembly are still external.</text>
+  <text x="650" y="765" class="box-title">중요한 경계</text>
+  <text x="650" y="792" class="box-body">저장소는 런타임 스캐폴드와 모델 경로를 제공하지만,</text>
+  <text x="650" y="814" class="box-body">라이브 시세, 브로커 자격증명, 피처 저장,</text>
+  <text x="650" y="836" class="box-body">과거 state_sequence 조립은 외부 책임입니다.</text>
 
   <rect x="1165" y="220" width="430" height="140" class="source"/>
-  <text x="1190" y="255" class="box-title">Caller-Supplied Live Inputs</text>
-  <text x="1190" y="282" class="box-body">raw payloads, numeric features or state_sequence,</text>
-  <text x="1190" y="304" class="box-body">venue eligibility, last prices, dependency state,</text>
-  <text x="1190" y="326" class="box-body">runtime config, and model requirements</text>
+  <text x="1190" y="255" class="box-title">호출자 제공 라이브 입력</text>
+  <text x="1190" y="282" class="box-body">raw payload, numeric features 또는 state_sequence,</text>
+  <text x="1190" y="304" class="box-body">venue eligibility, last price, dependency state,</text>
+  <text x="1190" y="326" class="box-body">runtime config, model requirements</text>
 
   <rect x="1165" y="395" width="430" height="165" class="runtime"/>
-  <text x="1190" y="430" class="box-title">Production Runtime Entry</text>
-  <text x="1190" y="457" class="box-body">ProductionOrchestrator and ProductionTradingEngine</text>
-  <text x="1190" y="479" class="box-body">run readiness checks, semantic refresh marks,</text>
+  <text x="1190" y="430" class="box-title">프로덕션 런타임 진입점</text>
+  <text x="1190" y="457" class="box-body">ProductionOrchestrator / ProductionTradingEngine</text>
+  <text x="1190" y="479" class="box-body">readiness check, semantic refresh mark,</text>
   <text x="1190" y="499" class="box-body">idempotency, retry/backoff, circuit breaker,</text>
-  <text x="1190" y="519" class="box-body">kill-switch handling, and runtime audit events</text>
+  <text x="1190" y="519" class="box-body">kill switch, runtime audit event</text>
 
   <rect x="1165" y="575" width="430" height="155" class="runtime"/>
   <text x="1190" y="610" class="box-title">LiveInferenceService</text>
-  <text x="1190" y="637" class="box-body">payload text extraction, direct VectorizationPipeline path,</text>
-  <text x="1190" y="659" class="box-body">latest vector injection into state_sequence,</text>
-  <text x="1190" y="681" class="box-body">and session-aware predictor invocation</text>
+  <text x="1190" y="637" class="box-body">payload text 추출, direct VectorizationPipeline,</text>
+  <text x="1190" y="659" class="box-body">최신 vector를 state_sequence에 주입,</text>
+  <text x="1190" y="681" class="box-body">session-aware predictor 호출</text>
 
   <rect x="1165" y="765" width="430" height="145" class="runtime"/>
-  <text x="1190" y="800" class="box-title">Predictor And Decision Layer</text>
-  <text x="1190" y="827" class="box-body">NumericFirstPredictor loads temporal artifacts, builds</text>
-  <text x="1190" y="849" class="box-body">state matrices, runs TemporalStateAttentionModel, then</text>
-  <text x="1190" y="871" class="box-body">DecisionEngine and ExecutionMapper</text>
-  <text x="1190" y="891" class="box-body">select action and venue</text>
+  <text x="1190" y="800" class="box-title">예측 및 의사결정 계층</text>
+  <text x="1190" y="827" class="box-body">NumericFirstPredictor가 temporal artifact를 로드하고</text>
+  <text x="1190" y="849" class="box-body">state matrix를 구성해 attention model을 실행</text>
+  <text x="1190" y="871" class="box-body">이후 DecisionEngine / ExecutionMapper가</text>
+  <text x="1190" y="891" class="box-body">행동과 venue를 선택</text>
 
   <rect x="1165" y="945" width="430" height="85" class="guardrail"/>
-  <text x="1190" y="980" class="box-title">Broker, Audit, And Monitoring</text>
+  <text x="1190" y="980" class="box-title">브로커, 감사, 모니터링</text>
   <text x="1190" y="1002" class="box-body">BrokerGateway, AuditLogStore, Monitoring</text>
 
   <rect x="1350" y="54" width="250" height="62" class="note"/>
-  <text x="1372" y="79" class="small">Optional: LLMEventNormalizer exists</text>
-  <text x="1372" y="97" class="small">for offline or experimental paths</text>
+  <text x="1372" y="79" class="small">선택 사항: LLMEventNormalizer는</text>
+  <text x="1372" y="97" class="small">오프라인/실험 경로에 남아 있음</text>
 
   <path d="M300 340 L300 375" class="edge"/>
   <path d="M300 510 L300 545" class="edge"/>
@@ -154,6 +154,6 @@
   <path d="M1475 116 L1475 395" class="edge-dash"/>
 
   <rect x="70" y="1050" width="1540" height="58" class="note"/>
-  <text x="94" y="1073" class="small">Primary runtime path: caller inputs -&gt; readiness gate -&gt; LiveInferenceService -&gt;</text>
-  <text x="94" y="1093" class="small">vectorization and temporal prediction -&gt; decision and venue mapping -&gt; broker, audit, and metrics.</text>
+  <text x="94" y="1073" class="small">기본 런타임 경로: 호출자 입력 -&gt; readiness gate -&gt; LiveInferenceService -&gt;</text>
+  <text x="94" y="1093" class="small">벡터화/temporal prediction -&gt; 의사결정/venue 매핑 -&gt; broker, audit, metrics.</text>
 </svg>

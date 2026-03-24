@@ -115,6 +115,14 @@ class ProductionCircuitBreakerOpen(RuntimeError):
     pass
 
 
+@dataclass(frozen=True)
+class DeadLetterRedriveResult:
+    anchor_time: datetime
+    symbols: list[str]
+    success: bool
+    error_message: str | None = None
+
+
 def _model_dump(model: BaseModel) -> dict:
     return model.model_dump() if hasattr(model, "model_dump") else model.dict()
 
@@ -605,6 +613,149 @@ class ProductionOrchestrator:
         drained = list(self.dead_letter_queue)
         self.dead_letter_queue.clear()
         return drained
+
+    @staticmethod
+    def _coerce_dead_letter_record(payload: dict) -> AnchorBatchDeadLetterRecord | None:
+        if payload.get("record_type") != "dead_letter":
+            return None
+        try:
+            anchor_time = datetime.fromisoformat(str(payload["anchor_time"]))
+            failed_at = datetime.fromisoformat(str(payload.get("failed_at", payload["anchor_time"])))
+        except (KeyError, TypeError, ValueError):
+            return None
+
+        raw_payloads = payload.get("payload_by_symbol", {})
+        raw_features = payload.get("features_by_symbol", {})
+        raw_venues = payload.get("venue_eligibility_by_symbol", {})
+        if not isinstance(raw_payloads, dict) or not isinstance(raw_features, dict) or not isinstance(raw_venues, dict):
+            return None
+
+        return AnchorBatchDeadLetterRecord(
+            anchor_time=anchor_time,
+            symbols=[str(symbol) for symbol in payload.get("symbols", [])],
+            payload_by_symbol={str(symbol): dict(data) for symbol, data in raw_payloads.items() if isinstance(data, dict)},
+            features_by_symbol={str(symbol): dict(data) for symbol, data in raw_features.items() if isinstance(data, dict)},
+            venue_eligibility_by_symbol={str(symbol): str(value) for symbol, value in raw_venues.items()},
+            error_message=str(payload.get("error_message", "")),
+            attempts=max(1, int(payload.get("attempts", 1))),
+            failed_at=failed_at,
+        )
+
+    def load_persisted_dead_letters(self, dead_letter_log_path: str | Path) -> list[AnchorBatchDeadLetterRecord]:
+        path = Path(dead_letter_log_path)
+        if not path.exists():
+            return []
+        records: list[AnchorBatchDeadLetterRecord] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            record = self._coerce_dead_letter_record(payload)
+            if record is not None:
+                records.append(record)
+        return records
+
+    def redrive_dead_letters(
+        self,
+        *,
+        records: list[AnchorBatchDeadLetterRecord],
+        last_price_by_symbol: dict[str, float],
+        dependency_state: RuntimeDependencyState,
+        runtime_config: ProductionRuntimeConfig,
+        model_requirements: ModelRuntimeRequirements,
+        equity_krw: float,
+        position_qty_by_symbol: dict[str, int] | None = None,
+        liquidity_score_by_symbol: dict[str, float] | None = None,
+        max_records: int | None = None,
+    ) -> list[DeadLetterRedriveResult]:
+        outcomes: list[DeadLetterRedriveResult] = []
+        selected_records = records[: max_records or len(records)]
+        for record in selected_records:
+            try:
+                self.run_anchor(
+                    symbols=record.symbols,
+                    anchor_time=record.anchor_time,
+                    payload_by_symbol=record.payload_by_symbol,
+                    features_by_symbol=record.features_by_symbol,
+                    venue_eligibility_by_symbol=record.venue_eligibility_by_symbol,
+                    last_price_by_symbol=last_price_by_symbol,
+                    dependency_state=dependency_state,
+                    runtime_config=runtime_config,
+                    model_requirements=model_requirements,
+                    equity_krw=equity_krw,
+                    position_qty_by_symbol=position_qty_by_symbol,
+                    liquidity_score_by_symbol=liquidity_score_by_symbol,
+                )
+                self.engine.audit_store.append_runtime_event(
+                    RuntimeAuditEvent(
+                        event_type="dead_letter_redriven",
+                        event_time=record.anchor_time,
+                        payload={
+                            "symbols": list(record.symbols),
+                            "failed_at": record.failed_at.isoformat(),
+                        },
+                    )
+                )
+                outcomes.append(
+                    DeadLetterRedriveResult(
+                        anchor_time=record.anchor_time,
+                        symbols=list(record.symbols),
+                        success=True,
+                    )
+                )
+            except Exception as exc:
+                self.engine.audit_store.append_runtime_event(
+                    RuntimeAuditEvent(
+                        event_type="dead_letter_redrive_failed",
+                        event_time=record.anchor_time,
+                        payload={
+                            "symbols": list(record.symbols),
+                            "failed_at": record.failed_at.isoformat(),
+                            "error": str(exc),
+                        },
+                    )
+                )
+                outcomes.append(
+                    DeadLetterRedriveResult(
+                        anchor_time=record.anchor_time,
+                        symbols=list(record.symbols),
+                        success=False,
+                        error_message=str(exc),
+                    )
+                )
+        return outcomes
+
+    def redrive_persisted_dead_letters(
+        self,
+        *,
+        last_price_by_symbol: dict[str, float],
+        dependency_state: RuntimeDependencyState,
+        runtime_config: ProductionRuntimeConfig,
+        model_requirements: ModelRuntimeRequirements,
+        equity_krw: float,
+        position_qty_by_symbol: dict[str, int] | None = None,
+        liquidity_score_by_symbol: dict[str, float] | None = None,
+        max_records: int | None = None,
+    ) -> list[DeadLetterRedriveResult]:
+        if not runtime_config.dead_letter_log_path:
+            return []
+        records = self.load_persisted_dead_letters(runtime_config.dead_letter_log_path)
+        return self.redrive_dead_letters(
+            records=records,
+            last_price_by_symbol=last_price_by_symbol,
+            dependency_state=dependency_state,
+            runtime_config=runtime_config,
+            model_requirements=model_requirements,
+            equity_krw=equity_krw,
+            position_qty_by_symbol=position_qty_by_symbol,
+            liquidity_score_by_symbol=liquidity_score_by_symbol,
+            max_records=max_records,
+        )
 
     def run_anchor(
         self,

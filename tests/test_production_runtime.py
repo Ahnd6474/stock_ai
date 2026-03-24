@@ -7,11 +7,13 @@ from kswing_sentinel.audit_log import AuditLogStore
 from kswing_sentinel.broker_gateway import BrokerCapabilities, BrokerGateway
 from kswing_sentinel.monitoring import Monitoring
 from kswing_sentinel.production_runtime import (
+    LiveOrderResult,
     LiveTradingBlockedError,
     ModelRuntimeRequirements,
     ProductionCircuitBreakerOpen,
     ProductionOrchestrator,
     ProductionReadinessGate,
+    ProductionReadinessReport,
     ProductionRuntimeConfig,
     ProductionTradingEngine,
     RuntimeDependencyState,
@@ -265,6 +267,40 @@ class AlwaysFailingBatchEngine:
         raise RuntimeError("persistent batch failure")
 
 
+class RecordingBatchEngine:
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+        self.audit_store = AuditLogStore()
+        self.monitoring = Monitoring()
+
+    def run_live_anchor_batch(self, **kwargs):
+        self.calls.append(dict(kwargs))
+        return (
+            ProductionReadinessReport(
+                checked_at=kwargs["anchor_time"],
+                ready=True,
+                trading_mode="KRX_ONLY",
+                blocking_issues=[],
+                warnings=[],
+                degraded_flags=[],
+            ),
+            {
+                symbol: LiveOrderResult(
+                    symbol=symbol,
+                    action="BUY",
+                    selected_venue="KRX",
+                    order_submitted=True,
+                    order_id=f"ORD-{index + 1}",
+                    execution_status="FILLED",
+                    filled_qty=1,
+                    rationale_codes=["REDRIVE_OK"],
+                    vetoes_triggered=[],
+                )
+                for index, symbol in enumerate(kwargs["symbols"])
+            },
+        )
+
+
 def test_production_orchestrator_opens_circuit_and_drains_dead_letters():
     engine = AlwaysFailingBatchEngine()
     now = datetime(2026, 3, 20, 0, 0, tzinfo=timezone.utc)
@@ -343,3 +379,43 @@ def test_production_orchestrator_persists_dead_letters_when_configured(tmp_path)
     assert records[0]["symbols"] == ["005930"]
     assert records[0]["error_message"] == "persistent batch failure"
     assert records[0]["payload_by_symbol"]["005930"]["headline"] == "failure case"
+
+
+def test_production_orchestrator_can_redrive_persisted_dead_letters(tmp_path):
+    anchor_time = datetime(2026, 3, 20, 0, 0, tzinfo=timezone.utc)
+    dead_letter_path = tmp_path / "dead_letters.jsonl"
+    cfg = ProductionRuntimeConfig(
+        requested_trading_mode="KRX_ONLY",
+        dead_letter_log_path=str(dead_letter_path),
+    )
+
+    failing_orchestrator = ProductionOrchestrator(AlwaysFailingBatchEngine(), now_fn=lambda: anchor_time)
+    with pytest.raises(RuntimeError):
+        failing_orchestrator.run_anchor(
+            symbols=["005930"],
+            anchor_time=anchor_time,
+            payload_by_symbol={"005930": {"headline": "redrive me"}},
+            features_by_symbol={"005930": {"flow_strength": 0.1}},
+            venue_eligibility_by_symbol={"005930": "KRX_ONLY"},
+            last_price_by_symbol={"005930": 100000.0},
+            dependency_state=_deps(),
+            runtime_config=cfg,
+            model_requirements=ModelRuntimeRequirements(),
+            equity_krw=100_000_000,
+            retry=0,
+        )
+
+    recording_engine = RecordingBatchEngine()
+    orchestrator = ProductionOrchestrator(recording_engine)
+    outcomes = orchestrator.redrive_persisted_dead_letters(
+        last_price_by_symbol={"005930": 100000.0},
+        dependency_state=_deps(),
+        runtime_config=cfg,
+        model_requirements=ModelRuntimeRequirements(),
+        equity_krw=100_000_000,
+    )
+
+    assert len(outcomes) == 1
+    assert outcomes[0].success is True
+    assert recording_engine.calls[0]["payload_by_symbol"]["005930"]["headline"] == "redrive me"
+    assert recording_engine.calls[0]["features_by_symbol"]["005930"]["flow_strength"] == 0.1

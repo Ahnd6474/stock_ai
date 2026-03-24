@@ -6,7 +6,7 @@ It is not yet a turnkey live-trading system with bundled market data and broker 
 
 ![K-Swing Sentinel Architecture](docs/architecture_block_diagram.svg)
 
-The diagram above shows the current repository boundary: offline data collection and training on the left, shared artifacts and configuration in the middle, and the guarded live runtime on the right. The runtime now includes anchor-batch idempotency plus retry/backoff, circuit-breaker, and dead-letter handling for transient failures, but the live path still expects the caller or external integrations to supply payloads, features, prices, venue eligibility, and dependency state.
+The diagram above shows the current repository boundary: offline data collection and training on the left, shared artifacts and configuration in the middle, and the guarded live runtime on the right. The runtime now includes anchor-batch idempotency plus retry/backoff, circuit-breaker, dead-letter capture, persisted dead-letter redrive helpers, and semantic-refresh marking for transient failures, but the live path still expects the caller or external integrations to supply payloads, features, prices, venue eligibility, and dependency state.
 
 ## At a Glance
 
@@ -24,7 +24,7 @@ The diagram above shows the current repository boundary: offline data collection
 - Predictor loading for legacy linear and multi-head artifacts plus temporal attention artifacts
 - Direct raw-text vectorization with sentence-level RoBERTa encoding, hierarchical transformer aggregation, and a hashing fallback
 - Optional LLM event normalization with structured-output validation for experimental or offline paths
-- Audit logging, monitoring hooks, anchor-batch orchestration retries/circuit breaking, semantic-refresh scheduling flags, dead-letter JSONL persistence, and production readiness checks
+- Audit logging, monitoring hooks, anchor-batch orchestration retries/circuit breaking, semantic-refresh scheduling flags, dead-letter JSONL persistence plus persisted-dead-letter redrive helpers, and production readiness checks
 - Data-collection scripts and sample training datasets under `data/training/`
 
 ## What Is Still Partial
@@ -32,7 +32,7 @@ The diagram above shows the current repository boundary: offline data collection
 - Live inference exists, but external payloads, numeric features, venue eligibility, last prices, dependency state, and usually historical `state_sequence` inputs still have to be supplied by the caller
 - LLM integration supports OpenRouter-style providers, but credentials and provider operations are outside the repository
 - The temporal predictor now consumes vector payloads, but historical sequence building and feature persistence are not bundled yet
-- The production runtime can retry transient batch failures, mark anchor or event-burst semantic refreshes, and persist dead letters when configured, but automated redrive and broader operator tooling are still not bundled
+- The production runtime can retry transient batch failures, mark anchor or event-burst semantic refreshes, persist dead letters when configured, and redrive persisted dead-letter records, but broader operator tooling and a fuller live semantic branch are still not bundled
 - The predictor and training pipeline are still baseline scaffolds, not a production-scale research or serving stack
 - The backtester enforces execution realism better than a toy simulator, but it is not yet a full event-driven portfolio engine
 
@@ -170,7 +170,7 @@ The current live path expects the caller to provide:
 
 If a temporal predictor artifact is loaded, the most useful input shape is a `state_sequence` whose steps contain `numeric_features` and optional vector payloads. If only flat features are provided, the predictor falls back to a single-step sequence. That keeps the core logic testable, but it also means this repository does not yet include the surrounding production services needed for live deployment.
 
-`ProductionOrchestrator` now wraps anchor batches with retry/backoff, circuit-breaker protection, dead-letter capture, optional JSONL persistence via `dead_letter_log_path`, and anchor-level idempotency. `ProductionTradingEngine` also memoizes per-symbol results within an anchor so batch retries do not resubmit already completed orders in the same process, and it records semantic-refresh requests for the documented refresh anchors or event-burst payloads.
+`ProductionOrchestrator` now wraps anchor batches with retry/backoff, circuit-breaker protection, dead-letter capture, optional JSONL persistence via `dead_letter_log_path`, persisted-dead-letter redrive helpers, and anchor-level idempotency. `ProductionTradingEngine` also memoizes per-symbol results within an anchor so batch retries do not resubmit already completed orders in the same process, and it records semantic-refresh requests for the documented refresh anchors or event-burst payloads.
 
 ## Configuration and Data
 
@@ -215,6 +215,6 @@ TODO.md                   Working implementation checklist
 - Replace remaining scaffold-level temporal predictor pieces with stronger trained artifacts
 - Connect live runtime inputs to real feature, event, and venue-eligibility sources
 - Expand execution realism, temporal labels, and portfolio simulation
-- Add automated redrive and richer operator tooling on top of persisted dead letters
+- Expand operator tooling and recovery workflows around persisted dead letters
 - Upgrade semantic refresh from policy flags to a fuller optional live semantic branch
 - Keep README, TODOs, and architecture documents aligned with actual implementation status

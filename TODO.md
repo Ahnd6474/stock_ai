@@ -53,7 +53,9 @@
 - [x] `vector_payload`를 마지막 step에 연결해 temporal predictor가 텍스트 벡터를 실제 입력으로 사용
 - [x] `state_sequence` 기반 `temporal_transformer_v1` artifact load/train 경로 추가
 - [x] timestep embedding 뒤에 self-attention context block과 causal attention block을 연속 배치
-- [x] README와 docs를 현재 모델 스택 기준으로 업데이트
+- [x] `ProductionOrchestrator`에 persisted dead-letter JSONL 로드 및 `redrive_persisted_dead_letters()` 재처리 helper 추가
+- [x] 문서에 적은 semantic refresh anchor와 event-burst 신호를 runtime audit event로 남기도록 반영
+- [x] README, docs, SVG 다이어그램을 현재 runtime 상태와 한글 표기 기준으로 동기화
 
 ## Done 기준
 
