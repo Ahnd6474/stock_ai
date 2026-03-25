@@ -5,7 +5,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from kswing_sentinel.predictor import NumericFirstPredictor, build_temporal_state_matrix
+from kswing_sentinel.predictor import NumericFirstPredictor, build_temporal_model_inputs, build_temporal_state_matrix
 from kswing_sentinel.training import TrainingPipeline
 
 
@@ -34,6 +34,7 @@ def test_build_temporal_state_matrix_uses_top_level_vector_for_latest_step_only(
 
 def _row_with_state_sequence(index: int) -> dict:
     sequence: list[dict] = []
+    base_time = datetime(2025, 1, 1, 9, 0, tzinfo=timezone.utc) + timedelta(days=index)
     for step in range(4):
         base = index + step + 1
         trend = 0.08 if base % 2 == 0 else -0.04
@@ -54,6 +55,16 @@ def _row_with_state_sequence(index: int) -> dict:
                     "z_social": [0.03 * base],
                     "z_macro": [0.04 * base],
                 },
+                "as_of_time": (base_time + timedelta(minutes=30 * step)).isoformat(),
+                "delta_features": {
+                    "delta_doc_count": 1.0 if step == 3 else 0.0,
+                    "new_doc_count": 1.0 if step == 3 and index % 2 == 0 else 0.0,
+                    "updated_doc_count": 1.0 if step == 3 and index % 2 == 1 else 0.0,
+                    "delta_novelty_mean": min(1.0, 0.2 + 0.05 * step),
+                    "delta_source_quality_mean": 0.75,
+                    "delta_freshness_mean": 0.9,
+                    "time_since_last_collection_sec": 1800.0 if step == 3 else 0.0,
+                },
             }
         )
 
@@ -61,6 +72,7 @@ def _row_with_state_sequence(index: int) -> dict:
     regime = "event" if latest["event_score"] >= 0.35 else ("trend" if latest["trend_120m"] > 0 else "chop")
     return {
         "date": date(2025, 1, 1) + timedelta(days=index),
+        "as_of_time": sequence[-1]["as_of_time"],
         "state_sequence": sequence,
         "er_20d": 0.01 + latest["flow_strength"] * 0.03 + latest["event_score"] * 0.02,
         "dd_20d": min(0.95, 0.03 + latest["extension_60m"] * 0.8),
@@ -69,6 +81,31 @@ def _row_with_state_sequence(index: int) -> dict:
         "uncertainty": min(1.0, 0.2 + latest["extension_60m"] * 0.5),
         "regime_final": regime,
     }
+
+
+def test_build_temporal_model_inputs_include_time_and_delta_features():
+    row = _row_with_state_sequence(3)
+    inputs = build_temporal_model_inputs(
+        row,
+        numeric_feature_keys=[
+            "close_return_1d",
+            "volume_z",
+            "flow_strength",
+            "trend_120m",
+            "extension_60m",
+            "event_score",
+        ],
+        vector_feature_dims={"z_event": 2, "z_social": 1, "z_macro": 1},
+        as_of_time=datetime.fromisoformat(row["as_of_time"]),
+        max_seq_len=4,
+    )
+
+    assert len(inputs["state_sequence"]) == 4
+    assert len(inputs["time_sequence"][0]) == 20
+    assert len(inputs["social_sequence"][0]) == 1
+    assert len(inputs["delta_sequence"][0]) == 7
+    assert inputs["time_sequence"][-1][0] == 0.0
+    assert inputs["delta_sequence"][-1][0] > 0.0
 
 
 def test_training_pipeline_trains_temporal_transformer_and_predicts(tmp_path):
@@ -136,6 +173,8 @@ def test_training_pipeline_trains_temporal_transformer_and_predicts(tmp_path):
     assert artifact["model_type"] == "temporal_transformer_v1"
     assert artifact["weights_path"] == weights_path.name
     assert artifact["context_num_layers"] == 1
+    assert artifact["time_feature_dim"] == 20
+    assert artifact["delta_feature_dim"] == 7
     assert prediction.model_version == artifact["model_version"]
     assert 0.0 <= prediction.p_up_20d <= 1.0
     assert 0.0 <= prediction.dd_20d <= 1.0

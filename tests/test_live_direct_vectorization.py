@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+from kswing_sentinel.event_store import EventDoc, EventStore
 from kswing_sentinel.live import LiveInferenceService
 from kswing_sentinel.schemas import FusedPrediction
 
@@ -72,6 +73,36 @@ class RecordingPredictor:
             model_version=self.artifact.model_version,
             calibrator_version="stub_cal_v1",
         )
+
+
+class ItemRecordingVectorizer(RecordingVectorizer):
+    def build_from_items(
+        self,
+        *,
+        event_items=None,
+        social_items=None,
+        macro_items=None,
+        source_doc_ids=None,
+        cluster_ids=None,
+        as_of_time=None,
+        session_type="OFF_MARKET",
+    ):
+        self.calls.append(
+            {
+                "event_items": list(event_items or []),
+                "social_items": list(social_items or []),
+                "source_doc_ids": list(source_doc_ids or []),
+                "cluster_ids": list(cluster_ids or []),
+                "as_of_time": as_of_time,
+                "session_type": session_type,
+            }
+        )
+        return {
+            "z_event": [0.0] * 64,
+            "z_social": [0.1] * 32,
+            "z_macro": [0.0] * 16,
+            "metadata": {"embedding_backend": "stub_items"},
+        }
 
 
 def test_live_service_bypasses_llm_and_vectorizes_raw_event_text():
@@ -170,3 +201,72 @@ def test_live_service_marks_event_burst_semantic_refresh_between_refresh_anchors
 
     assert predictor.calls[0]["semantic_refresh_required"] is True
     assert predictor.calls[0]["semantic_refresh_reason"] == "EVENT_BURST"
+
+
+def test_live_service_builds_social_delta_from_event_store_updates():
+    vectorizer = ItemRecordingVectorizer()
+    predictor = RecordingPredictor()
+    store = EventStore()
+    base = datetime(2026, 3, 20, 9, 0, tzinfo=timezone.utc)
+    store.add(
+        EventDoc(
+            doc_id="doc-1",
+            symbol="005930",
+            published_at=base,
+            first_seen_at=base,
+            retrieved_at=base,
+            available_at=base,
+            body="Initial commentary",
+            source_type="NEWS",
+            source_quality_score=0.8,
+            canonical_event_id="evt-1",
+            cluster_id="cluster-1",
+        )
+    )
+    store.add(
+        EventDoc(
+            doc_id="doc-2",
+            symbol="005930",
+            published_at=base.replace(minute=35),
+            first_seen_at=base.replace(minute=35),
+            retrieved_at=base.replace(minute=35),
+            available_at=base.replace(minute=35),
+            body="Initial commentary revised upward",
+            source_type="NEWS",
+            source_quality_score=0.9,
+            canonical_event_id="evt-1",
+            cluster_id="cluster-1",
+        )
+    )
+    live = LiveInferenceService(
+        normalizer=ExplodingNormalizer(),
+        vectorizer=vectorizer,
+        predictor=predictor,
+        event_store=store,
+    )
+
+    live.run_for_symbol(
+        symbol="005930",
+        as_of_time=datetime(2026, 3, 20, 9, 40, tzinfo=timezone.utc),
+        raw_event_payload={
+            "headline": "Management update",
+            "source_doc_ids": ["payload-doc"],
+            "cluster_ids": ["payload-cluster"],
+        },
+        features={
+            "flow_strength": 0.2,
+            "trend_120m": 0.3,
+            "extension_60m": 0.1,
+            "previous_collection_time": datetime(2026, 3, 20, 9, 5, tzinfo=timezone.utc).isoformat(),
+            "state_sequence": [
+                {"numeric_features": {"flow_strength": 0.1, "trend_120m": 0.1, "extension_60m": 0.1}},
+                {"numeric_features": {"flow_strength": 0.2, "trend_120m": 0.3, "extension_60m": 0.1}},
+            ],
+        },
+        venue_eligibility="KRX_ONLY",
+    )
+
+    assert vectorizer.calls[0]["social_items"][0]["text"] == "Initial commentary revised upward"
+    assert predictor.calls[0]["delta_features"]["delta_doc_count"] == 1.0
+    assert predictor.calls[0]["state_sequence"][-1]["delta_features"]["updated_doc_count"] == 1.0
+    assert predictor.calls[0]["vector_payload"]["metadata"]["embedding_backend"] == "stub_items"

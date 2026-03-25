@@ -15,12 +15,14 @@ except Exception:  # pragma: no cover - optional dependency
     nn = None
 
 from .predictor import (
+    DEFAULT_TEMPORAL_DELTA_FEATURE_DIM,
     DEFAULT_TEMPORAL_NUMERIC_FEATURE_KEYS,
     DEFAULT_TEMPORAL_SEQUENCE_KEY,
+    DEFAULT_TEMPORAL_TIME_FEATURE_DIM,
     DEFAULT_VECTOR_FEATURE_DIMS,
     REGIME_LABELS,
     TemporalStateAttentionModel,
-    build_temporal_state_matrix,
+    build_temporal_model_inputs,
 )
 from .text_encoder import DEFAULT_KOREAN_ROBERTA_MODEL_ID, TrainableRobertaEncoder
 
@@ -303,12 +305,15 @@ class TrainingPipeline:
         for row in rows:
             if not all(label_key in row for label_key in ("er_20d", "dd_20d", "p_up_20d")):
                 continue
-            sequence_matrix = build_temporal_state_matrix(
+            model_inputs = build_temporal_model_inputs(
                 row,
                 numeric_feature_keys=numeric_feature_keys,
                 vector_feature_dims=vector_feature_dims,
+                as_of_time=None,
                 sequence_key=sequence_key,
                 max_seq_len=max_seq_len,
+                include_time_features=True,
+                include_delta_features=True,
             )
             sequence = row.get(sequence_key)
             latest = sequence[-1] if isinstance(sequence, list) and sequence else row
@@ -318,7 +323,10 @@ class TrainingPipeline:
             flow_strength = _safe_float(numeric_source.get("flow_strength", row.get("flow_strength", 0.0)), 0.0)
             dataset.append(
                 {
-                    "sequence": sequence_matrix,
+                    "sequence": model_inputs["state_sequence"],
+                    "time_sequence": model_inputs["time_sequence"],
+                    "social_sequence": model_inputs["social_sequence"],
+                    "delta_sequence": model_inputs["delta_sequence"],
                     "targets": {
                         "er_20d": _safe_float(row["er_20d"], 0.0),
                         "dd_20d": _clamp(_safe_float(row["dd_20d"], 0.0), 0.0, 1.0),
@@ -365,6 +373,9 @@ class TrainingPipeline:
             raise RuntimeError("torch is required for temporal transformer training")
         numeric_keys = list(numeric_feature_keys or DEFAULT_TEMPORAL_NUMERIC_FEATURE_KEYS)
         resolved_vector_dims = _resolve_temporal_vector_feature_dims(vector_feature_dims)
+        time_feature_dim = DEFAULT_TEMPORAL_TIME_FEATURE_DIM
+        delta_feature_dim = DEFAULT_TEMPORAL_DELTA_FEATURE_DIM
+        social_feature_dim = int(resolved_vector_dims.get("z_social", 0))
         dataset = self._build_temporal_training_dataset(
             rows,
             numeric_feature_keys=numeric_keys,
@@ -385,6 +396,9 @@ class TrainingPipeline:
             num_layers=num_layers,
             dropout=dropout,
             max_seq_len=max_seq_len,
+            time_feature_dim=time_feature_dim,
+            social_feature_dim=social_feature_dim,
+            delta_feature_dim=delta_feature_dim,
         )
         model.to(device)
         model.train()
@@ -404,7 +418,33 @@ class TrainingPipeline:
                     max_seq_len=max_seq_len,
                     device=device,
                 )
-                outputs = model(state_batch, padding_mask=padding_mask)
+                time_batch, _ = _left_pad_sequence_batch(
+                    [row["time_sequence"] for row in batch_rows],
+                    input_dim=time_feature_dim,
+                    max_seq_len=max_seq_len,
+                    device=device,
+                )
+                social_batch = None
+                if social_feature_dim > 0:
+                    social_batch, _ = _left_pad_sequence_batch(
+                        [row["social_sequence"] for row in batch_rows],
+                        input_dim=social_feature_dim,
+                        max_seq_len=max_seq_len,
+                        device=device,
+                    )
+                delta_batch, _ = _left_pad_sequence_batch(
+                    [row["delta_sequence"] for row in batch_rows],
+                    input_dim=delta_feature_dim,
+                    max_seq_len=max_seq_len,
+                    device=device,
+                )
+                outputs = model(
+                    state_batch,
+                    padding_mask=padding_mask,
+                    time_features=time_batch,
+                    social_sequence=social_batch,
+                    delta_features=delta_batch,
+                )
                 er_targets = torch.tensor(
                     [row["targets"]["er_20d"] for row in batch_rows],
                     dtype=torch.float32,
@@ -461,11 +501,13 @@ class TrainingPipeline:
         artifact_payload = {
             "model_type": "temporal_transformer_v1",
             "model_version": model_version,
-            "schema_version": "v3",
+            "schema_version": "v4",
             "sequence_key": sequence_key,
             "numeric_feature_keys": numeric_keys,
             "feature_keys": numeric_keys,
             "vector_feature_dims": resolved_vector_dims,
+            "time_feature_dim": time_feature_dim,
+            "delta_feature_dim": delta_feature_dim,
             "max_seq_len": max_seq_len,
             "embedding_hidden_dim": embedding_hidden_dim,
             "d_model": d_model,

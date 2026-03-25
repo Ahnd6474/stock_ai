@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, time, timezone
 import json
+from math import copysign, log1p, pi, sin, cos
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,8 @@ REGIME_LABELS = ("trend", "event", "chop", "risk_off")
 DEFAULT_TEMPORAL_SEQUENCE_KEY = "state_sequence"
 DEFAULT_TEMPORAL_NUMERIC_FEATURE_KEYS = ["flow_strength", "trend_120m", "extension_60m"]
 DEFAULT_VECTOR_FEATURE_DIMS = {"z_event": 64, "z_social": 32, "z_macro": 16}
+DEFAULT_TEMPORAL_TIME_FEATURE_DIM = 20
+DEFAULT_TEMPORAL_DELTA_FEATURE_DIM = 7
 
 
 @dataclass(frozen=True)
@@ -89,6 +92,257 @@ def _top_level_vector_source(features: dict | None, key: str) -> object:
     return None
 
 
+def _vector_metadata(payload: object) -> dict[str, Any] | None:
+    if not isinstance(payload, dict):
+        return None
+    metadata = payload.get("metadata")
+    if isinstance(metadata, dict):
+        return metadata
+    return None
+
+
+def _parse_datetime(value: object) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+
+
+def _extract_datetime_from_mapping(payload: object, keys: tuple[str, ...]) -> datetime | None:
+    if not isinstance(payload, dict):
+        return None
+    for key in keys:
+        parsed = _parse_datetime(payload.get(key))
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _resolve_temporal_states(
+    features: dict,
+    *,
+    sequence_key: str,
+    max_seq_len: int | None = None,
+) -> tuple[list[dict], bool]:
+    raw_states = features.get(sequence_key)
+    using_explicit_sequence = isinstance(raw_states, list) and bool(raw_states)
+    if isinstance(raw_states, list) and raw_states:
+        states = [state for state in raw_states if isinstance(state, dict)]
+    else:
+        states = [features]
+    if max_seq_len is not None and max_seq_len > 0 and len(states) > max_seq_len:
+        states = states[-max_seq_len:]
+    return states, using_explicit_sequence
+
+
+def _state_timestamp(
+    state: dict,
+    *,
+    features: dict | None = None,
+    allow_top_level_fallback: bool = False,
+) -> datetime | None:
+    keys = (
+        "as_of_time",
+        "timestamp",
+        "observed_at",
+        "collected_at",
+        "available_at",
+        "retrieved_at",
+        "published_at",
+        "generated_at",
+    )
+    numeric = state.get("numeric_features")
+    for source in (
+        state,
+        numeric,
+        _vector_metadata(state.get("vector_payload")),
+        _vector_metadata(state.get("vectors")),
+        state.get("metadata"),
+    ):
+        parsed = _extract_datetime_from_mapping(source, keys)
+        if parsed is not None:
+            return parsed
+    if allow_top_level_fallback and isinstance(features, dict):
+        for source in (
+            features,
+            _vector_metadata(features.get("vector_payload")),
+            _vector_metadata(features.get("vectors")),
+            features.get("metadata"),
+        ):
+            parsed = _extract_datetime_from_mapping(source, keys)
+            if parsed is not None:
+                return parsed
+    return None
+
+
+def _resolve_target_time(
+    features: dict,
+    *,
+    states: list[dict],
+    explicit_as_of_time: datetime | None = None,
+) -> datetime | None:
+    if explicit_as_of_time is not None:
+        return explicit_as_of_time if explicit_as_of_time.tzinfo is not None else explicit_as_of_time.replace(tzinfo=timezone.utc)
+    for source in (
+        features,
+        _vector_metadata(features.get("vector_payload")),
+        _vector_metadata(features.get("vectors")),
+        features.get("metadata"),
+    ):
+        parsed = _extract_datetime_from_mapping(
+            source,
+            ("as_of_time", "timestamp", "observed_at", "collected_at", "available_at", "generated_at"),
+        )
+        if parsed is not None:
+            return parsed
+    for state in reversed(states):
+        parsed = _state_timestamp(state, features=features, allow_top_level_fallback=False)
+        if parsed is not None:
+            return parsed
+    raw_date = features.get("date")
+    if isinstance(raw_date, date) and not isinstance(raw_date, datetime):
+        return datetime.combine(raw_date, time.min, tzinfo=timezone.utc)
+    return None
+
+
+def _delta_source_for_state(
+    state: dict,
+    *,
+    features: dict | None = None,
+    allow_top_level_fallback: bool = False,
+) -> dict[str, Any]:
+    keys = (
+        "delta_doc_count",
+        "new_doc_count",
+        "updated_doc_count",
+        "delta_novelty_mean",
+        "delta_source_quality_mean",
+        "delta_freshness_mean",
+        "time_since_last_collection_sec",
+    )
+    for source in (
+        state.get("delta_features"),
+        state.get("social_delta"),
+        state.get("semantic_delta"),
+        _vector_metadata(state.get("vector_payload")),
+        _vector_metadata(state.get("vectors")),
+        state.get("metadata"),
+    ):
+        if isinstance(source, dict) and any(key in source for key in keys):
+            return source
+    if allow_top_level_fallback and isinstance(features, dict):
+        for source in (
+            features.get("delta_features"),
+            features.get("social_delta"),
+            features.get("semantic_delta"),
+            _vector_metadata(features.get("vector_payload")),
+            _vector_metadata(features.get("vectors")),
+            features.get("metadata"),
+        ):
+            if isinstance(source, dict) and any(key in source for key in keys):
+                return source
+    return {}
+
+
+def _cyclical_pair(value: float, period: float) -> tuple[float, float]:
+    if period <= 0:
+        return (0.0, 0.0)
+    angle = 2.0 * pi * (value / period)
+    return (sin(angle), cos(angle))
+
+
+def _time_feature_row(
+    *,
+    anchor_time: datetime | None,
+    target_time: datetime | None,
+    relative_step: int,
+    step_count: int,
+    since_prev_seconds: float,
+) -> list[float]:
+    step_denominator = max(1, step_count - 1)
+    relative_step_norm = relative_step / float(step_denominator)
+    relative_seconds = (anchor_time - target_time).total_seconds() if anchor_time is not None and target_time is not None else float(relative_step)
+    relative_seconds_norm = _clamp(relative_seconds / 86400.0, -1.0, 1.0)
+    relative_log_norm = copysign(
+        min(1.0, log1p(abs(relative_seconds)) / log1p(30.0 * 86400.0)),
+        relative_seconds,
+    )
+    since_prev_norm = min(1.0, log1p(max(0.0, since_prev_seconds)) / log1p(7.0 * 86400.0))
+    if anchor_time is None:
+        absolute = [0.0] * 16
+    else:
+        month_sin, month_cos = _cyclical_pair(float(anchor_time.month - 1), 12.0)
+        day_sin, day_cos = _cyclical_pair(float(anchor_time.day - 1), 31.0)
+        hour_sin, hour_cos = _cyclical_pair(float(anchor_time.hour), 24.0)
+        minute_sin, minute_cos = _cyclical_pair(float(anchor_time.minute), 60.0)
+        second_sin, second_cos = _cyclical_pair(float(anchor_time.second), 60.0)
+        absolute = [
+            (anchor_time.year - 2000.0) / 50.0,
+            (anchor_time.month - 1.0) / 11.0 if anchor_time.month > 0 else 0.0,
+            (anchor_time.day - 1.0) / 30.0 if anchor_time.day > 0 else 0.0,
+            anchor_time.hour / 23.0 if anchor_time.hour >= 0 else 0.0,
+            anchor_time.minute / 59.0 if anchor_time.minute >= 0 else 0.0,
+            anchor_time.second / 59.0 if anchor_time.second >= 0 else 0.0,
+            month_sin,
+            month_cos,
+            day_sin,
+            day_cos,
+            hour_sin,
+            hour_cos,
+            minute_sin,
+            minute_cos,
+            second_sin,
+            second_cos,
+        ]
+    return [relative_step_norm, relative_seconds_norm, relative_log_norm, since_prev_norm, *absolute]
+
+
+def _delta_feature_row(source: dict[str, Any], *, since_prev_seconds: float) -> list[float]:
+    delta_doc_count = _safe_float(source.get("delta_doc_count", source.get("doc_delta_count", 0.0)), 0.0)
+    new_doc_count = _safe_float(source.get("new_doc_count", 0.0), 0.0)
+    updated_doc_count = _safe_float(source.get("updated_doc_count", source.get("modified_doc_count", 0.0)), 0.0)
+    if delta_doc_count <= 0.0:
+        delta_doc_count = max(0.0, new_doc_count + updated_doc_count)
+    novelty_mean = _clamp(
+        _safe_float(source.get("delta_novelty_mean", source.get("novelty_mean", 0.0)), 0.0),
+        0.0,
+        1.0,
+    )
+    quality_mean = _clamp(
+        _safe_float(source.get("delta_source_quality_mean", source.get("source_quality_mean", 0.0)), 0.0),
+        0.0,
+        1.0,
+    )
+    freshness_mean = _clamp(
+        _safe_float(source.get("delta_freshness_mean", source.get("freshness_mean", 0.0)), 0.0),
+        0.0,
+        1.0,
+    )
+    time_since_last_collection = max(
+        0.0,
+        _safe_float(source.get("time_since_last_collection_sec", since_prev_seconds), since_prev_seconds),
+    )
+    return [
+        min(1.0, delta_doc_count / 8.0),
+        min(1.0, new_doc_count / 8.0),
+        min(1.0, updated_doc_count / 8.0),
+        novelty_mean,
+        quality_mean,
+        freshness_mean,
+        min(1.0, log1p(time_since_last_collection) / log1p(7.0 * 86400.0)),
+    ]
+
+
 def infer_temporal_event_score(features: dict, sequence_key: str = DEFAULT_TEMPORAL_SEQUENCE_KEY) -> float:
     if "event_score" in features:
         return _safe_float(features.get("event_score"), 0.0)
@@ -112,16 +366,11 @@ def build_temporal_state_matrix(
     sequence_key: str = DEFAULT_TEMPORAL_SEQUENCE_KEY,
     max_seq_len: int | None = None,
 ) -> list[list[float]]:
-    raw_states = features.get(sequence_key)
-    using_explicit_sequence = isinstance(raw_states, list) and bool(raw_states)
-    if isinstance(raw_states, list) and raw_states:
-        states = [state for state in raw_states if isinstance(state, dict)]
-    else:
-        states = [features]
-
-    if max_seq_len is not None and max_seq_len > 0 and len(states) > max_seq_len:
-        states = states[-max_seq_len:]
-
+    states, using_explicit_sequence = _resolve_temporal_states(
+        features,
+        sequence_key=sequence_key,
+        max_seq_len=max_seq_len,
+    )
     matrix: list[list[float]] = []
     for index, state in enumerate(states):
         numeric = state.get("numeric_features")
@@ -139,6 +388,161 @@ def build_temporal_state_matrix(
         input_dim = len(numeric_feature_keys) + sum(vector_feature_dims.values())
         matrix = [[0.0] * input_dim]
     return matrix
+
+
+def build_temporal_time_matrix(
+    features: dict,
+    *,
+    as_of_time: datetime | None = None,
+    sequence_key: str = DEFAULT_TEMPORAL_SEQUENCE_KEY,
+    max_seq_len: int | None = None,
+) -> list[list[float]]:
+    states, using_explicit_sequence = _resolve_temporal_states(
+        features,
+        sequence_key=sequence_key,
+        max_seq_len=max_seq_len,
+    )
+    target_time = _resolve_target_time(features, states=states, explicit_as_of_time=as_of_time)
+    matrix: list[list[float]] = []
+    previous_anchor: datetime | None = None
+    last_index = len(states) - 1
+    for index, state in enumerate(states):
+        allow_top_level_fallback = not using_explicit_sequence or index == last_index
+        state_time = _state_timestamp(
+            state,
+            features=features,
+            allow_top_level_fallback=allow_top_level_fallback,
+        )
+        since_prev_seconds = 0.0
+        if previous_anchor is not None and state_time is not None:
+            since_prev_seconds = max(0.0, (state_time - previous_anchor).total_seconds())
+        matrix.append(
+            _time_feature_row(
+                anchor_time=state_time or target_time,
+                target_time=target_time,
+                relative_step=index - last_index,
+                step_count=len(states),
+                since_prev_seconds=since_prev_seconds,
+            )
+        )
+        previous_anchor = state_time or previous_anchor or target_time
+    if not matrix:
+        matrix = [[0.0] * DEFAULT_TEMPORAL_TIME_FEATURE_DIM]
+    return matrix
+
+
+def build_temporal_social_matrix(
+    features: dict,
+    *,
+    social_dim: int,
+    sequence_key: str = DEFAULT_TEMPORAL_SEQUENCE_KEY,
+    max_seq_len: int | None = None,
+) -> list[list[float]]:
+    if social_dim <= 0:
+        return []
+    states, using_explicit_sequence = _resolve_temporal_states(
+        features,
+        sequence_key=sequence_key,
+        max_seq_len=max_seq_len,
+    )
+    matrix: list[list[float]] = []
+    for index, state in enumerate(states):
+        allow_top_level_fallback = not using_explicit_sequence or index == len(states) - 1
+        social_source = _vector_source_for_state(state, "z_social")
+        if social_source is None and allow_top_level_fallback:
+            social_source = _top_level_vector_source(features, "z_social")
+        matrix.append(_flatten_vector(social_source, social_dim))
+    if not matrix:
+        matrix = [[0.0] * social_dim]
+    return matrix
+
+
+def build_temporal_delta_matrix(
+    features: dict,
+    *,
+    as_of_time: datetime | None = None,
+    sequence_key: str = DEFAULT_TEMPORAL_SEQUENCE_KEY,
+    max_seq_len: int | None = None,
+) -> list[list[float]]:
+    states, using_explicit_sequence = _resolve_temporal_states(
+        features,
+        sequence_key=sequence_key,
+        max_seq_len=max_seq_len,
+    )
+    target_time = _resolve_target_time(features, states=states, explicit_as_of_time=as_of_time)
+    matrix: list[list[float]] = []
+    previous_anchor: datetime | None = None
+    last_index = len(states) - 1
+    for index, state in enumerate(states):
+        allow_top_level_fallback = not using_explicit_sequence or index == last_index
+        state_time = _state_timestamp(
+            state,
+            features=features,
+            allow_top_level_fallback=allow_top_level_fallback,
+        )
+        since_prev_seconds = 0.0
+        if previous_anchor is not None and state_time is not None:
+            since_prev_seconds = max(0.0, (state_time - previous_anchor).total_seconds())
+        elif previous_anchor is not None and target_time is not None and state_time is None:
+            since_prev_seconds = max(0.0, (target_time - previous_anchor).total_seconds())
+        delta_source = _delta_source_for_state(
+            state,
+            features=features,
+            allow_top_level_fallback=allow_top_level_fallback,
+        )
+        matrix.append(_delta_feature_row(delta_source, since_prev_seconds=since_prev_seconds))
+        previous_anchor = state_time or previous_anchor or target_time
+    if not matrix:
+        matrix = [[0.0] * DEFAULT_TEMPORAL_DELTA_FEATURE_DIM]
+    return matrix
+
+
+def build_temporal_model_inputs(
+    features: dict,
+    *,
+    numeric_feature_keys: list[str],
+    vector_feature_dims: dict[str, int],
+    as_of_time: datetime | None = None,
+    sequence_key: str = DEFAULT_TEMPORAL_SEQUENCE_KEY,
+    max_seq_len: int | None = None,
+    include_time_features: bool = True,
+    include_delta_features: bool = True,
+) -> dict[str, list[list[float]]]:
+    return {
+        "state_sequence": build_temporal_state_matrix(
+            features,
+            numeric_feature_keys=numeric_feature_keys,
+            vector_feature_dims=vector_feature_dims,
+            sequence_key=sequence_key,
+            max_seq_len=max_seq_len,
+        ),
+        "time_sequence": (
+            build_temporal_time_matrix(
+                features,
+                as_of_time=as_of_time,
+                sequence_key=sequence_key,
+                max_seq_len=max_seq_len,
+            )
+            if include_time_features
+            else []
+        ),
+        "social_sequence": build_temporal_social_matrix(
+            features,
+            social_dim=int(vector_feature_dims.get("z_social", 0)),
+            sequence_key=sequence_key,
+            max_seq_len=max_seq_len,
+        ),
+        "delta_sequence": (
+            build_temporal_delta_matrix(
+                features,
+                as_of_time=as_of_time,
+                sequence_key=sequence_key,
+                max_seq_len=max_seq_len,
+            )
+            if include_delta_features
+            else []
+        ),
+    }
 
 
 class _GPTBlock(nn.Module if nn is not None else object):
@@ -177,6 +581,55 @@ class _GPTBlock(nn.Module if nn is not None else object):
         return x
 
 
+class _GatedDeltaNetwork(nn.Module if nn is not None else object):
+    def __init__(self, *, social_dim: int, d_model: int, delta_feature_dim: int, dropout: float) -> None:
+        if nn is None:
+            raise RuntimeError("torch is required for temporal transformer predictors")
+        super().__init__()
+        gate_hidden_dim = max(d_model, social_dim * 2, 32)
+        candidate_hidden_dim = max(d_model, social_dim, 32)
+        gate_input_dim = (social_dim * 3) + d_model + delta_feature_dim
+        candidate_input_dim = (social_dim * 2) + d_model + delta_feature_dim
+        self.gate = nn.Sequential(
+            nn.Linear(gate_input_dim, gate_hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(gate_hidden_dim, d_model),
+            nn.Sigmoid(),
+        )
+        self.candidate = nn.Sequential(
+            nn.Linear(candidate_input_dim, candidate_hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(candidate_hidden_dim, d_model),
+            nn.Tanh(),
+        )
+        self.output_norm = nn.LayerNorm(d_model)
+
+    def forward(
+        self,
+        social_sequence: Any,
+        time_context: Any,
+        delta_features: Any | None = None,
+        padding_mask: Any | None = None,
+    ) -> Any:
+        prev_social = torch.zeros_like(social_sequence)
+        prev_social[:, 1:, :] = social_sequence[:, :-1, :]
+        social_delta = social_sequence - prev_social
+        delta_abs = social_delta.abs()
+        gate_parts = [social_sequence, prev_social, delta_abs, time_context]
+        candidate_parts = [social_delta, delta_abs, time_context]
+        if delta_features is not None:
+            gate_parts.append(delta_features)
+            candidate_parts.append(delta_features)
+        gate = self.gate(torch.cat(gate_parts, dim=-1))
+        candidate = self.candidate(torch.cat(candidate_parts, dim=-1))
+        out = self.output_norm(gate * candidate)
+        if padding_mask is not None:
+            out = out.masked_fill(padding_mask.unsqueeze(-1), 0.0)
+        return out
+
+
 class TemporalStateAttentionModel(nn.Module if nn is not None else object):
     def __init__(
         self,
@@ -189,11 +642,17 @@ class TemporalStateAttentionModel(nn.Module if nn is not None else object):
         num_layers: int = 2,
         dropout: float = 0.1,
         max_seq_len: int = 32,
+        time_feature_dim: int = 0,
+        social_feature_dim: int = 0,
+        delta_feature_dim: int = 0,
     ) -> None:
         if nn is None or torch is None:
             raise RuntimeError("torch is required for temporal transformer predictors")
         super().__init__()
         self.max_seq_len = max_seq_len
+        self.time_feature_dim = max(0, int(time_feature_dim))
+        self.social_feature_dim = max(0, int(social_feature_dim))
+        self.delta_feature_dim = max(0, int(delta_feature_dim))
         self.state_embed = nn.Sequential(
             nn.Linear(input_dim, embedding_hidden_dim),
             nn.GELU(),
@@ -201,6 +660,24 @@ class TemporalStateAttentionModel(nn.Module if nn is not None else object):
             nn.Linear(embedding_hidden_dim, d_model),
             nn.Dropout(dropout),
         )
+        self.time_embed: nn.Module | None = None
+        if self.time_feature_dim > 0:
+            time_hidden_dim = max(32, embedding_hidden_dim // 2)
+            self.time_embed = nn.Sequential(
+                nn.Linear(self.time_feature_dim, time_hidden_dim),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(time_hidden_dim, d_model),
+                nn.Dropout(dropout),
+            )
+        self.delta_network: nn.Module | None = None
+        if self.social_feature_dim > 0 and (self.time_feature_dim > 0 or self.delta_feature_dim > 0):
+            self.delta_network = _GatedDeltaNetwork(
+                social_dim=self.social_feature_dim,
+                d_model=d_model,
+                delta_feature_dim=self.delta_feature_dim,
+                dropout=dropout,
+            )
         self.position_embedding = nn.Parameter(torch.zeros(max_seq_len, d_model))
         nn.init.normal_(self.position_embedding, mean=0.0, std=0.02)
         self.context_blocks = nn.ModuleList(
@@ -218,7 +695,24 @@ class TemporalStateAttentionModel(nn.Module if nn is not None else object):
     def _causal_mask(self, seq_len: int, device: Any) -> Any:
         return torch.ones((seq_len, seq_len), dtype=torch.bool, device=device).triu(1)
 
-    def forward(self, state_sequence: Any, padding_mask: Any | None = None) -> dict[str, Any]:
+    def _normalize_sequence_input(self, seq: Any | None, *, expected_seq_len: int) -> Any | None:
+        if seq is None:
+            return None
+        if seq.ndim == 2:
+            seq = seq.unsqueeze(0)
+        if seq.size(1) > expected_seq_len:
+            seq = seq[:, -expected_seq_len:, :]
+        return seq
+
+    def forward(
+        self,
+        state_sequence: Any,
+        padding_mask: Any | None = None,
+        *,
+        time_features: Any | None = None,
+        social_sequence: Any | None = None,
+        delta_features: Any | None = None,
+    ) -> dict[str, Any]:
         if state_sequence.ndim == 2:
             state_sequence = state_sequence.unsqueeze(0)
         if padding_mask is not None and padding_mask.ndim == 1:
@@ -228,11 +722,51 @@ class TemporalStateAttentionModel(nn.Module if nn is not None else object):
             if padding_mask is not None:
                 padding_mask = padding_mask[:, -self.max_seq_len :]
         seq_len = int(state_sequence.size(1))
+        time_features = self._normalize_sequence_input(time_features, expected_seq_len=seq_len)
+        social_sequence = self._normalize_sequence_input(social_sequence, expected_seq_len=seq_len)
+        delta_features = self._normalize_sequence_input(delta_features, expected_seq_len=seq_len)
         x = self.state_embed(state_sequence)
-        x = x + self.position_embedding[:seq_len].unsqueeze(0).to(x.device)
-        attn_mask = self._causal_mask(seq_len, x.device)
         if padding_mask is not None:
             padding_mask = padding_mask.to(x.device)
+        if self.time_embed is not None:
+            if time_features is None:
+                time_features = torch.zeros(
+                    (x.size(0), seq_len, self.time_feature_dim),
+                    dtype=x.dtype,
+                    device=x.device,
+                )
+            else:
+                time_features = time_features.to(x.device)
+            time_context = self.time_embed(time_features)
+            x = x + time_context
+        else:
+            time_context = torch.zeros_like(x)
+        if self.delta_network is not None:
+            if social_sequence is None:
+                social_sequence = torch.zeros(
+                    (x.size(0), seq_len, self.social_feature_dim),
+                    dtype=x.dtype,
+                    device=x.device,
+                )
+            else:
+                social_sequence = social_sequence.to(x.device)
+            if self.delta_feature_dim > 0:
+                if delta_features is None:
+                    delta_features = torch.zeros(
+                        (x.size(0), seq_len, self.delta_feature_dim),
+                        dtype=x.dtype,
+                        device=x.device,
+                    )
+                else:
+                    delta_features = delta_features.to(x.device)
+            x = x + self.delta_network(
+                social_sequence,
+                time_context,
+                delta_features=delta_features,
+                padding_mask=padding_mask,
+            )
+        x = x + self.position_embedding[:seq_len].unsqueeze(0).to(x.device)
+        attn_mask = self._causal_mask(seq_len, x.device)
         for block in self.context_blocks:
             x = block(x, None, padding_mask)
         for block in self.blocks:
@@ -295,6 +829,12 @@ class NumericFirstPredictor:
 
     def _temporal_max_seq_len(self) -> int:
         return int(self.model_blob.get("max_seq_len", 32))
+
+    def _temporal_time_feature_dim(self) -> int:
+        return max(0, int(self.model_blob.get("time_feature_dim", 0)))
+
+    def _temporal_delta_feature_dim(self) -> int:
+        return max(0, int(self.model_blob.get("delta_feature_dim", 0)))
 
     def _resolve_sidecar_path(self, raw_path: object) -> Path:
         if not isinstance(raw_path, str) or not raw_path.strip():
@@ -376,6 +916,9 @@ class NumericFirstPredictor:
             num_layers=int(self.model_blob.get("num_layers", 2)),
             dropout=float(self.model_blob.get("dropout", 0.1)),
             max_seq_len=self._temporal_max_seq_len(),
+            time_feature_dim=self._temporal_time_feature_dim(),
+            social_feature_dim=int(vector_feature_dims.get("z_social", 0)),
+            delta_feature_dim=self._temporal_delta_feature_dim(),
         )
         with self._resolve_sidecar_path(self.model_blob.get("weights_path")).open("rb") as fh:
             state_dict = torch.load(fh, map_location="cpu")
@@ -394,16 +937,34 @@ class NumericFirstPredictor:
         features: dict,
     ) -> FusedPrediction:
         model = self._load_temporal_model()
-        sequence_matrix = build_temporal_state_matrix(
+        model_inputs = build_temporal_model_inputs(
             features,
             numeric_feature_keys=self._temporal_numeric_feature_keys(),
             vector_feature_dims=self._temporal_vector_feature_dims(),
+            as_of_time=as_of_time,
             sequence_key=self._temporal_sequence_key(),
             max_seq_len=self._temporal_max_seq_len(),
+            include_time_features=self._temporal_time_feature_dim() > 0,
+            include_delta_features=self._temporal_delta_feature_dim() > 0,
         )
-        tensor = torch.tensor(sequence_matrix, dtype=torch.float32).unsqueeze(0)
+        tensor = torch.tensor(model_inputs["state_sequence"], dtype=torch.float32).unsqueeze(0)
+        time_tensor = None
+        if self._temporal_time_feature_dim() > 0 and model_inputs["time_sequence"]:
+            time_tensor = torch.tensor(model_inputs["time_sequence"], dtype=torch.float32).unsqueeze(0)
+        social_tensor = None
+        social_dim = int(self._temporal_vector_feature_dims().get("z_social", 0))
+        if social_dim > 0 and model_inputs["social_sequence"]:
+            social_tensor = torch.tensor(model_inputs["social_sequence"], dtype=torch.float32).unsqueeze(0)
+        delta_tensor = None
+        if self._temporal_delta_feature_dim() > 0 and model_inputs["delta_sequence"]:
+            delta_tensor = torch.tensor(model_inputs["delta_sequence"], dtype=torch.float32).unsqueeze(0)
         with torch.no_grad():
-            outputs = model(tensor)
+            outputs = model(
+                tensor,
+                time_features=time_tensor,
+                social_sequence=social_tensor,
+                delta_features=delta_tensor,
+            )
 
         er20 = float(outputs["er_20d"][0].detach().cpu())
         dd20 = self.dd_adjuster.transform(float(outputs["dd_20d"][0].detach().cpu()))
