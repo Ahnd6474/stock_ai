@@ -48,6 +48,7 @@ tests/test_broker_gateway.py
 tests/test_calendar_pause.py
 tests/test_calibration_predictor.py
 tests/test_contract_examples.py
+tests/test_contracts_search_refinement_surface.py
 tests/test_cost_model.py
 tests/test_degraded_mode.py
 tests/test_event_store_lineage.py
@@ -58,6 +59,7 @@ tests/test_flow_leakage.py
 tests/test_intraday_dataset.py
 tests/test_label_builder.py
 tests/test_label_builder_extensions.py
+tests/test_live_direct_vectorization.py
 tests/test_llm_provider_path.py
 tests/test_no_lookahead.py
 tests/test_orchestration_resilience.py
@@ -67,6 +69,7 @@ tests/test_risk_portfolio.py
 tests/test_schema_validation.py
 tests/test_session_boundaries_extended.py
 tests/test_session_mapping.py
+tests/test_temporal_transformer_predictor.py
 tests/test_timestamp_boundaries.py
 tests/test_trainable_text_regressor.py
 tests/test_training_multihead_predictor.py

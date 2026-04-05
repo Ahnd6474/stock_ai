@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Mapping, Protocol, Sequence, runtime_checkable
+from typing import Mapping, Protocol, Sequence, TypedDict, runtime_checkable
 
 from .schemas import (
     EventMetadata,
@@ -14,6 +15,62 @@ from .schemas import (
     TradeDecision,
     VectorPayload,
 )
+
+
+NormalizedEvent = LLMNormalizedEvent
+
+
+class SearchResult(TypedDict):
+    title: str
+    url: str
+    snippet: str
+    source: str
+    published_at: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class SearchRefinementPolicy:
+    max_rounds: int = 3
+    max_results_per_round: int = 8
+    min_new_results_per_round: int = 1
+    dedupe_url: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class SearchRefinementRound:
+    query: str
+    results: Sequence[SearchResult]
+    notes: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class SearchRefinementTrace:
+    initial_query: str
+    rounds: Sequence[SearchRefinementRound]
+
+
+@runtime_checkable
+class BaseSearchClient(Protocol):
+    def search(
+        self,
+        query: str,
+        *,
+        max_results: int = 10,
+        as_of_time: datetime | None = None,
+        symbols: Sequence[str] | None = None,
+    ) -> Sequence[SearchResult]: ...
+
+
+@runtime_checkable
+class SearchRefinementService(Protocol):
+    def refine(
+        self,
+        query: str,
+        *,
+        policy: SearchRefinementPolicy | None = None,
+        as_of_time: datetime | None = None,
+        symbols: Sequence[str] | None = None,
+    ) -> SearchRefinementTrace: ...
 
 
 @runtime_checkable
@@ -45,8 +102,25 @@ class EventDedupAndClusteringService(Protocol):
 
 
 @runtime_checkable
-class LLMEventNormalizerService(Protocol):
-    def normalize(self, payload: Mapping[str, object], retry_once: bool = True) -> LLMNormalizedEvent: ...
+class EventNormalizerService(Protocol):
+    """
+    Search-first event normalization contract.
+
+    This contract intentionally does *not* assume an LLM-backed implementation. A conforming
+    normalizer may perform direct web/search retrieval and repeated refinement internally
+    (e.g., query expansion, dedup, refetch) and then return a stable normalized event.
+
+    The concrete refinement/search behavior is exposed separately via `BaseSearchClient` and
+    `SearchRefinementService` so callers don't need an OpenRouter/LLM-specific boundary just
+    to compile.
+    """
+
+    def normalize(self, payload: Mapping[str, object], retry_once: bool = True) -> NormalizedEvent: ...
+
+
+@runtime_checkable
+class LLMEventNormalizerService(EventNormalizerService, Protocol):
+    """Backward-compatible alias for `EventNormalizerService` (legacy name)."""
 
 
 @runtime_checkable

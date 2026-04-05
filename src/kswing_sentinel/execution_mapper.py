@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta
-from zoneinfo import ZoneInfo
 
-from .calendar import TradingCalendar
+from .calendar import KST, TradingCalendar
 from .cost_model import SessionCostModel
 from .schemas import ExecutionPlan, ExecutionRequest
 from .session_rules import classify_session, round_to_next_5m
-
-KST = ZoneInfo("Asia/Seoul")
 
 
 def _phase_end_minutes(session_type: str) -> int:

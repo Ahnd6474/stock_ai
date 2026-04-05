@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta
-from zoneinfo import ZoneInfo
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-KST = ZoneInfo("Asia/Seoul")
+try:
+    KST = ZoneInfo("Asia/Seoul")
+except ZoneInfoNotFoundError:
+    # Some minimal Python runtimes (notably on Windows) ship without IANA tzdata.
+    # Fall back to a fixed-offset timezone so imports and tests can run without
+    # requiring external `tzdata` installation.
+    KST = timezone(timedelta(hours=9))
 
 
 @dataclass(frozen=True)

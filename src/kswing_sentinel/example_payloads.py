@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
+from .calendar import KST
 from .schemas import (
     EventMetadata,
     FusedPrediction,
@@ -10,8 +10,6 @@ from .schemas import (
     TradeDecision,
     VectorPayload,
 )
-
-KST = ZoneInfo("Asia/Seoul")
 
 
 def example_llm_structured_output() -> dict:

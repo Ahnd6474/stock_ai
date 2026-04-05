@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 
-from .calendar import TradingCalendar
+from .calendar import KST, TradingCalendar
 from .schemas import SessionType
-
-KST = ZoneInfo("Asia/Seoul")
 
 
 def classify_session(ts: datetime, calendar: TradingCalendar | None = None) -> SessionType:
