@@ -3,3 +3,14 @@
 __pycache__/
 *.pyc
 **/.idea/workspace.xml
+
+_tmp_*/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+build/
+dist/
+.parallel_runs/
+.lineages/
+jakal-flow-logs/
