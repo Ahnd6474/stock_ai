@@ -76,7 +76,7 @@
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
 <<<<<<< Updated upstream
 =======
-    &quot;last_opened_file_path&quot;: &quot;C:/Users/alber/OneDrive/문서/GitHub/stock_ai/data/training&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/alber/GitHub/stock_ai/data/training&quot;,
 >>>>>>> Stashed changes
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
@@ -89,7 +89,7 @@
 }</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
-      <recent name="C:\Users\alber\OneDrive\문서\GitHub\stock_ai\data\training" />
+      <recent name="C:\Users\alber\GitHub\stock_ai\data\training" />
     </key>
   </component>
 }</component>
